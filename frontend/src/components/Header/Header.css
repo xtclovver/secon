@@ -1,0 +1,274 @@
+/* Импорт переменных темы */
+@import '../../styles/variables.css';
+
+.app-header {
+  height: var(--header-height);
+  background-color: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+  padding: 0 20px;
+  position: sticky; /* Делаем хедер "липким" */
+  top: 0;
+  z-index: 1000; /* Хедер должен быть поверх контента */
+  transition: background-color var(--transition-normal);
+}
+
+.header-container {
+  height: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1400px; /* Ограничиваем максимальную ширину */
+  margin: 0 auto; /* Центрируем контейнер */
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  text-decoration: none;
+  margin-right: 20px; /* Отступ справа от логотипа */
+}
+
+.mobile-menu-button {
+  display: none; /* Скрываем по умолчанию */
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 15px; /* Пространство между элементами справа */
+}
+
+/* Выпадающие меню */
+.notifications-dropdown,
+.profile-dropdown {
+  position: relative;
+}
+
+.icon-button { /* Общий стиль для кнопок с иконками */
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  position: relative; /* Для позиционирования badge */
+}
+
+.icon-button:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.notifications-button .badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: var(--danger-color);
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 5px;
+  border-radius: 50%;
+  min-width: 18px; /* Минимальная ширина для круглого вида */
+  text-align: center;
+  line-height: 1; /* Убираем лишнюю высоту строки */
+}
+
+.profile-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--border-radius-md);
+  transition: background-color var(--transition-fast);
+}
+
+.profile-button:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.profile-button svg {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+}
+
+.user-name {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px); /* Отступ от кнопки */
+  right: 0;
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 250px;
+  z-index: 1010; /* Выше хедера */
+  border: 1px solid var(--border-color);
+  overflow: hidden; /* Скрываем выходящий контент */
+}
+
+.menu-header {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: bold;
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary); /* Небольшой фон для заголовка */
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-info strong {
+  font-size: 1rem;
+  margin-bottom: 2px;
+}
+
+.user-email {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
+.user-role {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--info-color);
+  color: white;
+  align-self: flex-start; /* Роль не растягивается */
+}
+.user-role.manager {
+  background-color: var(--warning-color);
+  color: #333; /* Темный текст для желтого фона */
+}
+.user-role.admin {
+  background-color: var(--danger-color);
+}
+
+.empty-notifications {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.menu-list {
+  list-style: none;
+  padding: 5px 0; /* Небольшие отступы сверху/снизу */
+}
+
+.menu-list li button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 15px;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  transition: background-color var(--transition-fast);
+}
+
+.menu-list li button:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.menu-list li button svg {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+/* Мобильное меню */
+.mobile-menu {
+  position: absolute;
+  top: var(--header-height); /* Под хедером */
+  left: 0;
+  right: 0;
+  background-color: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+  z-index: 999; /* Ниже хедера, но выше контента */
+  overflow: hidden;
+}
+
+.mobile-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 0;
+}
+
+.mobile-nav a, .mobile-logout-button {
+  padding: 12px 20px;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 1rem;
+  transition: background-color var(--transition-fast);
+  display: flex; /* Для кнопки выхода */
+  align-items: center; /* Для кнопки выхода */
+  gap: 10px; /* Для кнопки выхода */
+}
+
+.mobile-nav a:hover, .mobile-logout-button:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.mobile-nav a.active {
+  background-color: var(--accent-color);
+  color: white;
+  font-weight: bold;
+}
+
+.mobile-logout-button {
+  color: var(--danger-color);
+  font-weight: 500;
+}
+.mobile-logout-button svg {
+  font-size: 1.1rem;
+}
+
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .mobile-menu-button {
+    display: block; /* Показываем кнопку на мобильных */
+    margin-left: 15px; /* Отступ слева */
+  }
+
+  .header-right {
+    display: none; /* Скрываем правую часть по умолчанию */
+  }
+  
+  .header-right.hidden-on-mobile {
+     /* Этот класс не нужен, так как .header-right уже скрыт */
+  }
+
+  .app-header.mobile-menu-open .header-right {
+     /* Если нужно показать правую часть при открытом меню (нетипично) */
+     /* display: flex; */
+  }
+  
+  .logo {
+      margin-right: auto; /* Логотип занимает доступное место слева */
+  }
+}

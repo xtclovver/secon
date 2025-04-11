@@ -1,0 +1,67 @@
+/* Импорт переменных темы */
+@import '../../styles/variables.css';
+
+.app-footer {
+  height: var(--footer-height);
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0; /* Футер не должен сжиматься */
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  margin-left: var(--sidebar-width); /* Отступ слева, как у контента */
+  transition: margin-left var(--transition-normal); /* Анимация отступа */
+}
+
+.sidebar.collapsed ~ .app-footer { /* Сдвигаем футер при свернутом сайдбаре */
+   margin-left: var(--sidebar-width-collapsed);
+}
+
+.footer-container {
+  width: 100%;
+  max-width: 1400px; /* Ограничиваем максимальную ширину */
+  margin: 0 auto; /* Центрируем контейнер */
+  text-align: center;
+}
+
+.app-footer p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Стили для ссылок в футере (если будут добавлены) */
+.app-footer nav {
+  margin-top: 5px;
+}
+
+.app-footer nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  margin: 0 10px;
+  font-size: 0.8rem;
+  transition: color var(--transition-fast);
+}
+
+.app-footer nav a:hover {
+  color: var(--accent-color);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .app-footer {
+    margin-left: 0; /* Убираем отступ на мобильных */
+    padding: 10px; /* Уменьшаем паддинг */
+    height: auto; /* Автоматическая высота */
+    text-align: center;
+  }
+  
+  .footer-container {
+      /* Можно добавить flex для центрирования на мобильных */
+      /* display: flex; */
+      /* flex-direction: column; */
+      /* align-items: center; */
+  }
+}
