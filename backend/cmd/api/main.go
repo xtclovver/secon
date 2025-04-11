@@ -2,10 +2,10 @@ package main
 
 import (
 	"log"
-	
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	
+
 	"vacation-scheduler/internal/config"
 	"vacation-scheduler/internal/database"
 	"vacation-scheduler/internal/handlers"
@@ -20,18 +20,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Ошибка загрузки конфигурации: %v", err)
 	}
-	
+
 	// Инициализация подключения к базе данных
 	db, err := database.NewConnection(cfg.Database)
 	if err != nil {
 		log.Fatalf("Ошибка подключения к базе данных: %v", err)
 	}
 	defer db.Close()
-	
+
 	// Создание репозиториев
 	userRepo := repositories.NewUserRepository(db)
 	vacationRepo := repositories.NewVacationRepository(db)
-	
+
 	// Создание сервисов
 	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
 	// Передаем оба репозитория в NewVacationService
@@ -46,7 +46,7 @@ func main() {
 
 	// Настройка маршрутизатора Gin
 	router := gin.Default()
-	
+
 	// Настройка CORS
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
@@ -55,10 +55,10 @@ func main() {
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	}))
-	
+
 	// Публичные маршруты
 	router.POST("/api/auth/login", authHandler.Login)
-	
+
 	// Защищенные маршруты
 	api := router.Group("/api")
 	api.Use(middleware.JWTAuth(cfg.JWT.Secret))
@@ -76,9 +76,9 @@ func main() {
 			vacationsMgmt := vacations.Group("")
 			vacationsMgmt.Use(middleware.ManagerOrAdminOnly()) // Доступ только для менеджеров или админов
 			{
-				vacationsMgmt.GET("/all", appHandler.GetAllVacations)                 // Получение всех заявок (с фильтрами)
-				vacationsMgmt.GET("/department/:id", appHandler.GetDepartmentVacations) // Менеджер может получить заявки своего отдела (ID отдела игнорируется для менеджера)
-				vacationsMgmt.GET("/intersections", appHandler.GetVacationIntersections) // Проверка пересечений (доступна менеджерам)
+				vacationsMgmt.GET("/all", appHandler.GetAllVacations)                          // Получение всех заявок (с фильтрами)
+				vacationsMgmt.GET("/department/:id", appHandler.GetDepartmentVacations)        // Менеджер может получить заявки своего отдела (ID отдела игнорируется для менеджера)
+				vacationsMgmt.GET("/intersections", appHandler.GetVacationIntersections)       // Проверка пересечений (доступна менеджерам)
 				vacationsMgmt.POST("/requests/:id/approve", appHandler.ApproveVacationRequest) // Утверждение заявки
 				vacationsMgmt.POST("/requests/:id/reject", appHandler.RejectVacationRequest)   // Отклонение заявки
 			}

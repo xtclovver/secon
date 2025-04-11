@@ -19,7 +19,7 @@ type ServerConfig struct {
 
 // DatabaseConfig - конфигурация базы данных
 type DatabaseConfig struct {
-	DSN string // Data Source Name (e.g., "user:password@tcp(localhost:3306)/vacation_scheduler?parseTime=true")
+	DSN string // Data Source Name (e.g., "user:password@tcp(34.88.50.168:3306)/vacation_scheduler?parseTime=true")
 }
 
 // JWTConfig - конфигурация JWT
@@ -33,11 +33,11 @@ func Load() (*Config, error) {
 	// Заглушка с дефолтными значениями
 	cfg := &Config{
 		Server: ServerConfig{
-			Port: ":8080", // Порт по умолчанию
+			Port: ":8081", // Измененный порт для бэкенда
 		},
 		Database: DatabaseConfig{
 			// ВАЖНО: Замените на ваш реальный DSN для MySQL
-			DSN: "root:12341234@tcp(localhost:3306)/vacation_scheduler?parseTime=true", 
+			DSN: "root:v?jKm}J7R8(X/+xZ@tcp(34.88.50.168:3306)/vacation_scheduler?parseTime=true",
 		},
 		JWT: JWTConfig{
 			Secret: "your_very_secret_jwt_key", // ВАЖНО: Замените на ваш секретный ключ! Лучше брать из env.
@@ -45,7 +45,7 @@ func Load() (*Config, error) {
 	}
 
 	// Простая валидация (пример)
-	if cfg.Database.DSN == "user:password@tcp(localhost:3306)/vacation_scheduler?parseTime=true" {
+	if cfg.Database.DSN == "user:password@tcp(34.88.50.168:3306)/vacation_scheduler?parseTime=true" {
 		// Можно выводить предупреждение, но не блокировать запуск для простоты
 		// log.Println("ПРЕДУПРЕЖДЕНИЕ: Используется DSN базы данных по умолчанию. Укажите реальные данные.")
 	}
@@ -56,7 +56,6 @@ func Load() (*Config, error) {
 	if cfg.Server.Port == "" {
 		return nil, errors.New("необходимо указать порт сервера")
 	}
-
 
 	return cfg, nil
 }

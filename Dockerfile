@@ -14,9 +14,11 @@ COPY backend/ ./
 # Build the backend application
 # Assuming the main package is in cmd/api
 # If your main.go is directly in backend/, change the path accordingly
-# RUN CGO_ENABLED=0 GOOS=linux go build -o /app/api ./cmd/api/main.go
+# Build the backend application
+# Assuming the main package is in cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/api ./cmd/api/main.go
 # Based on the file structure, main.go is in the root of backend/
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/api ./main.go
+# RUN CGO_ENABLED=0 GOOS=linux go build -o /app/api ./main.go
 
 # ---- Stage 2: Build Frontend ----
 FROM node:20-alpine AS frontend-builder
@@ -26,8 +28,8 @@ WORKDIR /app/frontend
 # Copy package.json and package-lock.json
 COPY frontend/package.json frontend/package-lock.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (including devDependencies needed for build)
+RUN npm ci
 
 # Copy the rest of the frontend source code
 COPY frontend/ ./
