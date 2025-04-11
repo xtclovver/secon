@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"vacation-scheduler/backend/database" // Import database package
-	"vacation-scheduler/backend/handlers" // Import handlers package
+	"vacation-scheduler/backend/database"   // Import database package
+	"vacation-scheduler/backend/handlers"   // Import handlers package
 	"vacation-scheduler/backend/middleware" // Import middleware package
 
 	"github.com/gin-contrib/cors" // Import CORS middleware
@@ -46,17 +46,17 @@ func main() {
 			vacationRoutes := authenticated.Group("/vacations")
 			{
 				// Routes accessible to all authenticated users
-				vacationRoutes.POST("/", handlers.CreateVacationRequest) // Create a new request for the logged-in user
+				vacationRoutes.POST("/", handlers.CreateVacationRequest)    // Create a new request for the logged-in user
 				vacationRoutes.GET("/my", handlers.GetUserVacationRequests) // Get requests for the logged-in user (adjust handler needed)
 
 				// Routes requiring Admin privileges
 				adminVacationRoutes := vacationRoutes.Group("/")
 				adminVacationRoutes.Use(middleware.AdminMiddleware()) // Apply admin middleware
 				{
-					adminVacationRoutes.GET("/", handlers.GetVacationRequests)          // Get all requests (admin view)
-					adminVacationRoutes.PUT("/:id", handlers.UpdateVacationRequest)     // Update any request (status, dates)
-					adminVacationRoutes.DELETE("/:id", handlers.DeleteVacationRequest)  // Delete any request
-					adminVacationRoutes.GET("/overlaps", handlers.CheckOverlappingVacations) // Check overlaps (admin view)
+					adminVacationRoutes.GET("/", handlers.GetVacationRequests)                 // Get all requests (admin view)
+					adminVacationRoutes.PUT("/:id", handlers.UpdateVacationRequest)            // Update any request (status, dates)
+					adminVacationRoutes.DELETE("/:id", handlers.DeleteVacationRequest)         // Delete any request
+					adminVacationRoutes.GET("/overlaps", handlers.CheckOverlappingVacations)   // Check overlaps (admin view)
 					adminVacationRoutes.GET("/user/:userId", handlers.GetUserVacationRequests) // Get requests for a specific user (admin view)
 					// TODO: Add route for submitting schedule (admin?)
 				}
