@@ -31,6 +31,9 @@ COPY frontend/package.json frontend/package-lock.json ./
 # Install dependencies (including devDependencies needed for build)
 RUN npm ci
 
+# Ensure scripts in node_modules/.bin are executable
+RUN chmod -R +x node_modules/.bin
+
 # Copy the rest of the frontend source code
 COPY frontend/ ./
 
