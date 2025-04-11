@@ -48,8 +48,11 @@ func main() {
 	router := gin.Default()
 
 	// Настройка CORS
+	// ВАЖНО: Для продакшена лучше использовать AllowOrigins с переменной окружения,
+	// содержащей URL вашего фронтенда в Cloud Run, вместо AllowAllOrigins: true.
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowAllOrigins: true, // Разрешаем все источники для простоты
+		// AllowOrigins:     []string{"http://localhost:3000"}, // Старая настройка
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
