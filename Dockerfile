@@ -38,7 +38,7 @@ RUN chmod -R +x node_modules/.bin
 COPY frontend/ ./
 
 # Build the frontend application
-RUN npm run build
+RUN node node_modules/react-scripts/bin/react-scripts.js build
 
 # ---- Stage 3: Final Image ----
 FROM nginx:1.27-alpine
