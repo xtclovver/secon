@@ -38,8 +38,8 @@ RUN npm run build
 # ---- Stage 3: Final Image ----
 FROM nginx:1.27-alpine
 
-# Install necessary tools (like shell for entrypoint) if needed, though alpine nginx usually has sh
-# RUN apk add --no-cache <packages>
+# Install gettext for envsubst used in entrypoint.sh
+RUN apk add --no-cache gettext
 
 # Copy the built backend binary from the backend-builder stage
 COPY --from=backend-builder /app/api /app/api
@@ -54,8 +54,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose port 80 for Nginx
-EXPOSE 80
+# Expose the default Cloud Run port (though Cloud Run uses the PORT env var)
+EXPOSE 8080
 
 # Set the entrypoint script as the command to run
 ENTRYPOINT ["/entrypoint.sh"]
