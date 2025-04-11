@@ -1,366 +1,191 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  CssBaseline,
-  AppBar,
-  Toolbar,
-  Typography,
-  Container,
-  Box,
-  CircularProgress,
-  Alert,
-  ThemeProvider,
-  createTheme,
-  Paper,
-  Fab,
-  Button,
-  Switch,
-  FormControlLabel,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import LogoutIcon from '@mui/icons-material/Logout';
-import VacationRequestForm from './components/VacationRequestForm';
-import VacationList from './components/VacationList';
-import Login from './components/Login';
-import {
-  getAuthToken,
-  removeAuthToken,
-  logoutUser,
-  getMyVacations, // API для получения своих заявок
-  getAllVacations, // API для получения всех заявок (админ)
-} from './services/api';
-import { jwtDecode } from 'jwt-decode'; // Библиотека для декодирования JWT
+import React, { useState, useEffect, Suspense, lazy } from 'react'; // Добавлен Suspense и lazy
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import { AnimatePresence } from 'framer-motion';
 
-// Тема MUI (оставляем как есть или кастомизируем дальше)
-const theme = createTheme({
-  palette: {
-    primary: { main: '#1976d2' },
-    secondary: { main: '#dc004e' },
-    background: { default: '#f4f6f8', paper: '#ffffff' },
-    text: { primary: '#333', secondary: '#666' },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h4: { fontWeight: 600, marginBottom: '1.5rem', color: '#1a237e' },
-    h6: { fontWeight: 500, color: '#3f51b5' },
-    button: { textTransform: 'none', fontWeight: 'bold' }, 
-  },
-  shape: {
-    borderRadius: 8, // Скругляем углы
-  },
-  components: {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          transition: 'box-shadow 0.3s ease-in-out',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.05)', // Мягкая тень по умолчанию
-          '&:hover': {
-             boxShadow: '0 5px 15px rgba(0,0,0,0.1)', // Более заметная тень при наведении
-          }
-        }
-      },
-      defaultProps: {
-        elevation: 0, // Убираем стандартную тень, используем свою
-      }
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 6, 
-          transition: 'background-color 0.2s ease-in-out, transform 0.1s ease-in-out',
-          '&:hover': {
-            transform: 'translateY(-1px)',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-          }
-        },
-        containedPrimary: {
-            '&:hover': {
-                backgroundColor: '#1565c0',
-            }
-        }
-      }
-    },
-    MuiFab: {
-      styleOverrides: {
-        root: {
-          transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-          boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-          '&:hover': {
-            transform: 'scale(1.08)', 
-            boxShadow: '0 6px 15px rgba(0,0,0,0.3)',
-          }
-        }
-      }
-    },
-    MuiAppBar: {
-        styleOverrides: {
-            root: {
-                backgroundColor: '#ffffff', // Белый AppBar
-                color: '#333', // Темный текст
-                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-            }
-        }
-    },
-    MuiSwitch: { 
-        styleOverrides: {
-            root: {
-            },
-            switchBase: {
-                '&.Mui-checked': {
-                    color: '#fff',
-                    '& + .MuiSwitch-track': {
-                        backgroundColor: '#dc004e',
-                        opacity: 1,
-                        border: 0,
-                    },
-                },
-            },
-            thumb: {
-            },
-            track: {
-                borderRadius: 34 / 2,
-                opacity: 1,
-                backgroundColor: 'rgba(0,0,0,.25)',
-                boxSizing: 'border-box',
-            },
-        }
-    },
-    MuiAlert: {
-        styleOverrides: {
-            root: {
-                borderRadius: 6, 
-            }
-        }
-    }
-  },
-});
+// Context
+import { ThemeProvider } from './context/ThemeContext';
+import { UserProvider } from './context/UserContext'; 
 
-// Функция для извлечения данных пользователя из токена
-const getUserDataFromToken = (token) => {
-  if (!token) return null;
-  try {
-    const decoded = jwtDecode(token); // Декодируем токен
-    // Предполагаем, что токен содержит user_id и is_admin в payload
-    return {
-      token: token,
-      userId: decoded.user_id, // Имя поля должно совпадать с тем, что в бэкенде (Claims)
-      isAdmin: decoded.is_admin, // Имя поля должно совпадать с тем, что в бэкенде (Claims)
-      // Добавляем время истечения для возможной проверки
-      expiresAt: decoded.exp ? new Date(decoded.exp * 1000) : null,
-    };
-  } catch (error) {
-    console.error("Error decoding token:", error);
-    removeAuthToken(); // Удаляем невалидный токен
-    return null;
-  }
-};
+// Стили (перемещены наверх)
+import 'react-toastify/dist/ReactToastify.css';
+import './styles/App.css'; 
+import './styles/variables.css'; 
+
+// Компоненты
+import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'; // Исправлен путь
+import Header from './components/Header/Header'; // Исправлен путь
+import Sidebar from './components/Sidebar/Sidebar'; // Исправлен путь
+import Footer from './components/Footer/Footer'; // Исправлен путь
+import Loader from './components/ui/Loader/Loader'; 
+
+// Сервисы (перемещены выше)
+import { isAuthenticated, getCurrentUser, logout } from './api/auth';
+
+// Страницы (используем lazy loading)
+const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const UserDashboard = lazy(() => import('./pages/dashboard/UserDashboard')); // Будет создан позже
+const ManagerDashboard = lazy(() => import('./pages/dashboard/ManagerDashboard'));
+const AdminDashboard = lazy(() => import('./pages/dashboard/AdminDashboard')); // Будет создан позже
+const VacationForm = lazy(() => import('./pages/vacations/VacationForm'));
+const VacationsList = lazy(() => import('./pages/vacations/VacationsList')); // Будет создан позже
+const VacationCalendar = lazy(() => import('./pages/vacations/VacationCalendar')); // Будет создан позже
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage')); // Будет создан позже
 
 
-function App() {
-  const [currentUser, setCurrentUser] = useState(null); // Хранит { token, userId, isAdmin, expiresAt }
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true); // Общий лоадер для инициализации и загрузки данных
-  const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [viewAsAdmin, setViewAsAdmin] = useState(false); // Для админа: переключение вида
+const App = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true); // Состояние загрузки данных пользователя
 
-  // Проверка токена при загрузке приложения
   useEffect(() => {
-    const token = getAuthToken();
-    const userData = getUserDataFromToken(token);
-    if (userData && userData.expiresAt && userData.expiresAt > new Date()) {
-      setCurrentUser(userData);
-      // Если пользователь админ, по умолчанию смотрим как админ
-      if (userData.isAdmin) {
-        setViewAsAdmin(true);
-      }
-    } else {
-      // Если токена нет или он истек
-      removeAuthToken();
-      setCurrentUser(null);
-    }
-    setLoading(false); // Завершаем начальную загрузку состояния аутентификации
-  }, []);
+    const fetchUser = async () => {
+      console.log("App useEffect running..."); // Лог 1: Проверяем запуск useEffect
+      if (isAuthenticated()) {
+        console.log("User is authenticated (token found)."); // Лог 2: Проверяем аутентификацию
+        try {
+          const storedUser = localStorage.getItem('user');
+          console.log("Stored user data from localStorage:", storedUser); // Лог 3: Смотрим, что в localStorage
+          if (storedUser) {
+             setUser(JSON.parse(storedUser));
+          } else {
+             // Если пользователя нет в localStorage, но есть токен, разлогиниваем
+             // Если пользователя нет в localStorage, но есть токен, разлогиниваем
+             console.log("Token exists, but no user data in localStorage. Logging out.");
+             logout();
+             // Важно выйти из try/catch или функции после logout, чтобы не пытаться парсить null
+             setLoading(false); // Завершаем загрузку в этом случае тоже
+             return; 
+          }
+          
+          // Пытаемся парсить только если storedUser не null
+          const userData = JSON.parse(storedUser); 
+          setUser(userData); // Устанавливаем состояние
+          console.log("User data set in App state:", userData); // Лог 4: Выводим данные пользователя ПОСЛЕ setUser
+          
+          // --- Закомментированный блок для реального API ---
+          // const realUserData = await getCurrentUser(); 
+          // console.log("User data from API:", realUserData); 
+          // if (realUserData) {
+          //    setUser(realUserData);
+          // } else {
+          //    logout(); // Разлогиниваем, если API не вернуло пользователя
+          // }
+          // --- Конец закомментированного блока ---
 
-  // Функция для загрузки заявок в зависимости от роли и вида
-  const fetchRequests = useCallback(async () => {
-    if (!currentUser) return; // Не загружаем, если не авторизован
-
-    setLoading(true);
-    setError(null);
-    try {
-      let response;
-      if (currentUser.isAdmin && viewAsAdmin) {
-        // Админ смотрит все заявки
-        response = await getAllVacations();
+         } catch (error) {
+          console.error('Error fetching/parsing user data:', error); // Лог 5: Ловим ошибки в try
+          // Если произошла ошибка (например, токен невалиден или JSON некорректен), разлогиниваем
+          logout();
+        }
       } else {
-        // Обычный пользователь или админ смотрит свои заявки
-        response = await getMyVacations();
+          console.log("User is not authenticated (no token found)."); // Лог 6: Если токена нет
       }
-      setRequests(response.data || []);
-    } catch (err) {
-      console.error("Fetch error:", err);
-      setError(err.response?.data?.error || 'Не удалось загрузить заявки.');
-      if (err.response?.status === 401) {
-          handleLogout(); // Разлогиниваем при ошибке авторизации
-      }
-      setRequests([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentUser, viewAsAdmin]); // Зависимости: пользователь и режим просмотра
+      setLoading(false); // Завершаем загрузку
+      console.log("App useEffect finished."); // Лог 7: Проверяем завершение useEffect
+    };
 
-  // Загружаем заявки при изменении состояния аутентификации или режима просмотра
-  useEffect(() => {
-    if (currentUser) {
-      fetchRequests();
-    } else {
-      // Если пользователь разлогинился, очищаем заявки
-      setRequests([]);
-    }
-  }, [currentUser, fetchRequests]);
+    fetchUser();
+  }, []); // Пустой массив зависимостей, чтобы выполнилось один раз при монтировании
 
-  // Обработчик успешного входа
-  const handleLoginSuccess = (userData) => {
-    const fullUserData = getUserDataFromToken(userData.token); // Декодируем для получения всех данных
-    if (fullUserData) {
-        setCurrentUser(fullUserData);
-        if (fullUserData.isAdmin) {
-            setViewAsAdmin(true); // Админ по умолчанию видит все
-        }
-    } else {
-        // Обработка ошибки декодирования, если необходимо
-        setError("Ошибка декодирования");
-        removeAuthToken();
-    }
-  };
-
-  // Обработчик выхода
-  const handleLogout = () => {
-    logoutUser();
-    setCurrentUser(null);
-    setViewAsAdmin(false);
-    setShowForm(false);
-    console.log("Пользователь вышел");
-  };
-
-  const handleRequestCreated = () => {
-    fetchRequests(); 
-    setShowForm(false);
-  };
-
-  const handleViewToggle = (event) => {
-    setViewAsAdmin(event.target.checked);
-  };
-
-
-  if (loading && !currentUser) {
-    // Показываем лоадер только при самой первой загрузке, пока проверяется токен
-    return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-          <CircularProgress />
-        </Box>
-      </ThemeProvider>
-    );
+  // Отображение глобального загрузчика во время проверки аутентификации
+  if (loading) {
+    return <Loader />; // Отображаем лоадер на весь экран
   }
 
-  if (!currentUser) {
-    // Если пользователь не аутентифицирован, показываем форму входа
-    return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Container component="main" maxWidth="xs" sx={{ mt: 8 }}>
-          <Paper elevation={3} sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Typography component="h1" variant="h5">
-              Vacation Scheduler Login
-            </Typography>
-            <Login onLoginSuccess={handleLoginSuccess} />
-          </Paper>
-        </Container>
-      </ThemeProvider>
-    );
-  }
-
-  // Пользователь аутентифицирован
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AppBar position="static" elevation={1} sx={{ marginBottom: '2rem' }}>
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            График Отпусков
-          </Typography>
-          {currentUser.isAdmin && (
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={viewAsAdmin}
-                  onChange={handleViewToggle}
-                  color="secondary"
-                />
-              }
-              label="Admin View"
-              sx={{ color: 'white', mr: 2 }}
+    <ThemeProvider>
+      {/* Передаем user и setUser в провайдер */}
+      <UserProvider value={{ user, setUser }}>
+        <Router>
+          <div className="app">
+            <ToastContainer
+              position="top-right"
+              autoClose={5000}
+              hideProgressBar={false}
+              newestOnTop
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="colored" // Используем цветные уведомления
             />
-          )}
-          <Button color="inherit" onClick={handleLogout} startIcon={<LogoutIcon />}>
-            Выход
-          </Button>
-        </Toolbar>
-      </AppBar>
 
-      <Container maxWidth="lg">
-        <Typography variant="h4" gutterBottom align="center">
-          {currentUser.isAdmin && viewAsAdmin ? 'Все Заявки (Admin)' : 'Мои Заявки на Отпуск'}
-        </Typography>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-
-        {loading ? (
-          <Box display="flex" justifyContent="center" my={4}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-            <VacationList
-                requests={requests}
-                isAdminView={currentUser.isAdmin && viewAsAdmin}
-                currentUserId={currentUser.userId}
-                onUpdateRequest={fetchRequests}
-                onDeleteRequest={fetchRequests}
-            />
-          </Paper>
-        )}
-
-        {!viewAsAdmin && showForm && (
-          <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 8 }}>
-            <Typography variant="h6" gutterBottom>Новая заявка</Typography>
-            <VacationRequestForm
-              onSuccess={handleRequestCreated}
-              onCancel={() => setShowForm(false)}
-            />
-          </Paper>
-        )}
-
-        {/* Кнопка FAB для добавления, только если не в режиме админа */}
-        {!viewAsAdmin && (
-          <Fab
-            color="primary"
-            aria-label="add"
-            sx={{ position: 'fixed', bottom: 32, right: 32 }}
-            onClick={() => setShowForm(!showForm)}
-          >
-            <AddIcon />
-          </Fab>
-        )}
-      </Container>
+            {/* Отображаем Header и Sidebar только если пользователь аутентифицирован */}
+            {isAuthenticated() && user && <Header />} 
+            
+            <div className="app-container">
+              {isAuthenticated() && user && <Sidebar />}
+              
+              <main className="app-content">
+                {/* Suspense для обработки ленивой загрузки компонентов */}
+                <Suspense fallback={<Loader />}> 
+                  <AnimatePresence mode="wait">
+                    <Routes>
+                      {/* Общедоступные маршруты */}
+                      <Route 
+                        path="/login" 
+                        element={isAuthenticated() && user ? <Navigate to="/dashboard" replace /> : <LoginPage />} 
+                      />
+                      
+                      {/* Защищенные маршруты */}
+                      <Route element={<ProtectedRoute />}>
+                        {/* Перенаправление на соответствующий дашборд */}
+                        <Route 
+                          path="/" 
+                          element={
+                            <Navigate 
+                              to={
+                                !user // Если user еще null (маловероятно из-за ProtectedRoute, но для надежности)
+                                  ? "/login" 
+                                  : user.isAdmin 
+                                    ? "/admin/dashboard" 
+                                    : user.isManager 
+                                      ? "/manager/dashboard" 
+                                      : "/dashboard"
+                              } 
+                              replace 
+                            />
+                          } 
+                        />
+                        
+                        {/* Маршруты для всех аутентифицированных пользователей */}
+                        <Route path="/dashboard" element={<UserDashboard />} />
+                        <Route path="/vacations/new" element={<VacationForm />} />
+                        <Route path="/vacations/list" element={<VacationsList />} />
+                        <Route path="/vacations/calendar" element={<VacationCalendar />} />
+                        
+                        {/* Маршруты для руководителей (дополнительная проверка роли) */}
+                        <Route 
+                          path="/manager/dashboard" 
+                          element={
+                            user?.isManager ? <ManagerDashboard /> : <Navigate to="/dashboard" replace />
+                          } 
+                        />
+                        
+                        {/* Маршруты для администраторов (дополнительная проверка роли) */}
+                        <Route 
+                          path="/admin/dashboard" 
+                          element={
+                            user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" replace />
+                          } 
+                        />
+                      </Route>
+                      
+                      {/* Маршрут для страницы 404 */}
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </AnimatePresence>
+                </Suspense>
+              </main>
+            </div>
+            
+            {isAuthenticated() && user && <Footer />}
+          </div>
+        </Router>
+      </UserProvider>
     </ThemeProvider>
   );
-}
+};
 
 export default App;

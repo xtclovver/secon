@@ -1,0 +1,193 @@
+/* Импорт переменных темы */
+@import '../../styles/variables.css';
+
+.sidebar {
+  width: var(--sidebar-width);
+  height: calc(100vh - var(--header-height)); /* Высота за вычетом хедера */
+  background-color: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+  position: fixed; /* Фиксируем сайдбар */
+  top: var(--header-height); /* Под хедером */
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  transition: width var(--transition-normal), background-color var(--transition-normal);
+  z-index: 900; /* Ниже хедера */
+  overflow-x: hidden; /* Скрываем горизонтальный скролл при сворачивании */
+}
+
+.sidebar.dark {
+  /* Стили для темной темы, если нужны специфичные */
+}
+
+.sidebar.collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* Разносим заголовок и кнопку */
+  padding: 15px;
+  height: 50px; /* Фиксированная высота заголовка */
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0; /* Заголовок не должен сжиматься */
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  white-space: nowrap; /* Предотвращаем перенос текста */
+}
+
+.collapse-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.collapse-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.sidebar-nav {
+  flex-grow: 1; /* Навигация занимает все доступное пространство */
+  overflow-y: auto; /* Добавляем скролл, если пунктов много */
+  padding-top: 15px;
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav li {
+  margin-bottom: 5px; /* Небольшой отступ между пунктами */
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: var(--border-radius-md);
+  margin: 0 10px; /* Отступы по бокам для активного состояния */
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap; /* Предотвращаем перенос текста */
+  overflow: hidden; /* Скрываем текст, выходящий за пределы */
+}
+
+.sidebar-nav a svg {
+  font-size: 1.2rem;
+  margin-right: 15px;
+  flex-shrink: 0; /* Иконка не должна сжиматься */
+  transition: margin-right var(--transition-normal);
+}
+
+.sidebar-nav a span {
+  font-size: 0.95rem;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar-nav a:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.sidebar-nav a.active {
+  background-color: var(--accent-color);
+  color: white;
+  font-weight: 500;
+}
+
+.sidebar-nav a.active svg {
+  color: white; /* Иконка тоже белая в активном состоянии */
+}
+
+/* Стили для свернутого состояния */
+.sidebar.collapsed .sidebar-nav a {
+  justify-content: center; /* Центрируем иконку */
+  padding: 12px 0; /* Убираем горизонтальные паддинги */
+  margin: 0 5px; /* Уменьшаем боковые отступы */
+}
+
+.sidebar.collapsed .sidebar-nav a svg {
+  margin-right: 0; /* Убираем отступ у иконки */
+  font-size: 1.4rem; /* Можно немного увеличить иконку */
+}
+
+.sidebar.collapsed .sidebar-nav a span {
+  /* opacity: 0; */ /* Текст скрывается через JS/анимацию */
+  /* display: none; */ /* Текст скрывается через JS/анимацию */
+}
+
+/* Разделители или заголовки для ролей (опционально) */
+.role-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border-color);
+}
+
+.role-section a {
+ /* Можно добавить специфичные стили для ролей */
+}
+
+.manager-section a.active {
+  background-color: var(--warning-color);
+  color: #333;
+}
+.manager-section a.active svg {
+  color: #333;
+}
+
+.admin-section a.active {
+  background-color: var(--danger-color);
+  color: white;
+}
+.admin-section a.active svg {
+  color: white;
+}
+
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .sidebar {
+    /* На мобильных сайдбар может быть скрыт по умолчанию и выезжать */
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal);
+    z-index: 1100; /* Выше хедера на мобильных */
+    height: 100vh; /* На всю высоту */
+    top: 0;
+  }
+
+  .sidebar.open { /* Класс для открытия на мобильных */
+    transform: translateX(0);
+  }
+  
+  /* Затемнение фона при открытом мобильном меню */
+  .sidebar-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1050; /* Между сайдбаром и хедером */
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity var(--transition-normal), visibility var(--transition-normal);
+  }
+  .sidebar-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+  }
+}

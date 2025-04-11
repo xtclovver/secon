@@ -1,0 +1,67 @@
+/* CSS переменные для светлой и темной тем */
+:root {
+  /* Основные цвета светлой темы */
+  --bg-primary: #f8f9fa;        /* Основной фон страницы */
+  --bg-secondary: #ffffff;      /* Фон карточек, хедера, сайдбара */
+  --bg-tertiary: #e9ecef;       /* Фон для инпутов, некоторых кнопок, ховеров */
+  --text-primary: #212529;      /* Основной цвет текста */
+  --text-secondary: #6c757d;    /* Вторичный цвет текста (серый) */
+  --text-tertiary: #adb5bd;     /* Третичный цвет текста (светло-серый) */
+  --border-color: #dee2e6;      /* Цвет рамок */
+  --accent-color: #0d6efd;      /* Основной акцентный цвет (синий) */
+  --accent-hover: #0b5ed7;      /* Акцентный цвет при наведении */
+  --success-color: #198754;     /* Цвет успеха (зеленый) */
+  --warning-color: #ffc107;     /* Цвет предупреждения (желтый) */
+  --danger-color: #dc3545;      /* Цвет опасности (красный) */
+  --info-color: #0dcaf0;        /* Цвет информации (голубой) */
+  
+  /* Тени */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  
+  /* Скругления */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+  
+  /* Анимации */
+  --transition-fast: 0.2s ease-in-out;
+  --transition-normal: 0.3s ease-in-out;
+  --transition-slow: 0.5s ease-in-out;
+  
+  /* Размеры компонентов */
+  --header-height: 60px;
+  --sidebar-width: 240px;
+  --sidebar-width-collapsed: 60px;
+  --footer-height: 40px;
+
+  /* Переменные для анимаций */
+  --animation-slide-in: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --animation-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  --animation-elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+}
+
+/* Темная тема */
+/* Атрибут data-theme устанавливается в ThemeContext.js */
+[data-theme="dark"] {
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e1e;
+  --bg-tertiary: #2d2d2d; /* Чуть светлее для контраста */
+  --text-primary: #e9ecef; /* Не чисто белый, а светло-серый */
+  --text-secondary: #adb5bd;
+  --text-tertiary: #6c757d;
+  --border-color: #444444; /* Темнее рамки */
+  --accent-color: #3d8bfd; /* Светлее синий для темного фона */
+  --accent-hover: #5a9cfd;
+  --success-color: #28a745; /* Зеленый может остаться тем же */
+  --warning-color: #ffca2c; /* Чуть ярче желтый */
+  --danger-color: #e74c3c; /* Чуть ярче красный */
+  --info-color: #34d3eb; /* Чуть ярче голубой */
+  
+  /* Тени для темной темы (менее заметные) */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.4);
+}
