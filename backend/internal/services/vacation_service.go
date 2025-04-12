@@ -23,7 +23,8 @@ type VacationServiceInterface interface {
 	GetOrganizationalUnitVacations(unitID int, year int, statusFilter *int) ([]models.VacationRequest, error)                                                      // GetDepartmentVacations -> GetOrganizationalUnitVacations, departmentID -> unitID
 	GetAllUserVacations(requestingUserID int, yearFilter *int, statusFilter *int, userIDFilter *int, unitIDFilter *int) ([]models.VacationRequestAdminView, error) // departmentIDFilter -> unitIDFilter
 	CancelVacationRequest(requestID int, cancellingUserID int) error
-	ApproveVacationRequest(requestID int, approverID int) error
+	// Изменена сигнатура: возвращает список конфликтов и ошибку
+	ApproveVacationRequest(requestID int, approverID int) ([]models.ConflictingPeriod, error)
 	RejectVacationRequest(requestID int, rejecterID int, reason string) error
 }
 
@@ -46,6 +47,10 @@ type VacationRepositoryInterface interface {
 
 	// --- Уведомления ---
 	CreateNotification(notification *models.Notification) error
+
+	// --- Проверка конфликтов ---
+	GetUserPositionByID(userID int) (*int, error)                                                                                                         // Добавлен метод получения должности
+	GetApprovedVacationConflictsByPosition(positionID int, excludeUserID int, periodsToCheck []models.VacationPeriod) ([]models.ConflictingPeriod, error) // Добавлен метод поиска конфликтов
 }
 
 // VacationService реализует VacationServiceInterface
@@ -499,54 +504,91 @@ func (s *VacationService) CancelVacationRequest(requestID int, cancellingUserID 
 	return nil
 }
 
-// ApproveVacationRequest утверждает заявку
-func (s *VacationService) ApproveVacationRequest(requestID int, approverID int) error {
+// ApproveVacationRequest утверждает заявку и возвращает список конфликтов (предупреждений)
+func (s *VacationService) ApproveVacationRequest(requestID int, approverID int) ([]models.ConflictingPeriod, error) {
 	req, err := s.vacationRepo.GetVacationRequestByID(requestID)
 	if err != nil {
-		return fmt.Errorf("ошибка получения заявки ID %d для утверждения: %w", requestID, err)
+		return nil, fmt.Errorf("ошибка получения заявки ID %d для утверждения: %w", requestID, err)
 	}
 	if req == nil {
-		return fmt.Errorf("заявка ID %d не найдена", requestID)
+		return nil, fmt.Errorf("заявка ID %d не найдена", requestID)
 	}
 
+	// --- Проверка прав на утверждение (как и раньше) ---
 	approver, err := s.userRepo.FindByID(approverID)
 	if err != nil {
-		return fmt.Errorf("ошибка проверки прав пользователя ID %d: %w", approverID, err)
+		return nil, fmt.Errorf("ошибка проверки прав пользователя ID %d: %w", approverID, err)
 	}
 	if approver == nil {
-		return fmt.Errorf("утверждающий пользователь ID %d не найден", approverID)
+		return nil, fmt.Errorf("утверждающий пользователь ID %d не найден", approverID)
 	}
 
 	canApprove := false
 	if approver.IsAdmin {
 		canApprove = true
 	} else if approver.IsManager {
-		employee, err := s.userRepo.FindByID(req.UserID)
+		employee, errUser := s.userRepo.FindByID(req.UserID) // Переименована переменная ошибки
+		if errUser != nil {
+			log.Printf("[ApproveVacationRequest] Warning: could not get employee %d data to check unit access: %v", req.UserID, errUser)
+			return nil, fmt.Errorf("ошибка получения данных сотрудника %d для проверки доступа: %w", req.UserID, errUser)
+		}
+		if employee == nil {
+			return nil, fmt.Errorf("сотрудник %d, подавший заявку, не найден", req.UserID)
+		}
 		accessGranted, accessErr := s.checkUserUnitAccess(approver, employee)
 		if accessErr != nil {
-			return fmt.Errorf("ошибка проверки доступа для утверждения: %w", accessErr)
+			return nil, fmt.Errorf("ошибка проверки доступа для утверждения: %w", accessErr)
 		}
-		if err == nil && employee != nil && accessGranted {
+		if accessGranted {
 			canApprove = true
-		} else if err != nil {
-			log.Printf("[ApproveVacationRequest] Warning: could not get employee %d data to check unit access: %v", req.UserID, err)
 		}
 	}
 	if !canApprove {
 		log.Printf("[ApproveVacationRequest] Access denied: User %d (admin: %t, manager: %t, unit: %v) cannot approve request %d for user %d", approver.ID, approver.IsAdmin, approver.IsManager, approver.OrganizationalUnitID, requestID, req.UserID)
-		return fmt.Errorf("пользователь ID %d не имеет прав для утверждения заявки ID %d", approverID, requestID)
+		return nil, fmt.Errorf("пользователь ID %d не имеет прав для утверждения заявки ID %d", approverID, requestID)
 	}
 	if req.StatusID != models.StatusPending {
-		return fmt.Errorf("можно утвердить только заявку ID %d в статусе 'На рассмотрении' (текущий статус: %d)", requestID, req.StatusID)
+		return nil, fmt.Errorf("можно утвердить только заявку ID %d в статусе 'На рассмотрении' (текущий статус: %d)", requestID, req.StatusID)
 	}
 
+	// --- Проверка конфликтов ПЕРЕД утверждением ---
+	var conflicts []models.ConflictingPeriod
+	positionID, errPos := s.vacationRepo.GetUserPositionByID(req.UserID)
+	if errPos != nil {
+		// Логируем ошибку, но не прерываем утверждение, если должность не удалось получить
+		log.Printf("[ApproveVacationRequest] Warning: could not get position for user %d while checking conflicts for request %d: %v", req.UserID, requestID, errPos)
+	} else if positionID != nil {
+		// Если должность есть, проверяем конфликты
+		log.Printf("[ApproveVacationRequest] Checking conflicts for request %d (user %d, position %d)", requestID, req.UserID, *positionID)
+		conflicts, err = s.vacationRepo.GetApprovedVacationConflictsByPosition(*positionID, req.UserID, req.Periods)
+		if err != nil {
+			// Логируем ошибку проверки конфликтов, но не прерываем утверждение
+			log.Printf("[ApproveVacationRequest] Error checking conflicts for request %d: %v", requestID, err)
+			// Очищаем конфликты на всякий случай, чтобы не вернуть ошибочные данные
+			conflicts = []models.ConflictingPeriod{}
+			// Можно вернуть ошибку, если считаем это критичным:
+			// return nil, fmt.Errorf("ошибка проверки конфликтов отпусков: %w", err)
+		} else if len(conflicts) > 0 {
+			log.Printf("[ApproveVacationRequest] Found %d conflicts for request %d", len(conflicts), requestID)
+		}
+	} else {
+		log.Printf("[ApproveVacationRequest] Skipping conflict check for request %d as user %d has no position assigned.", requestID, req.UserID)
+	}
+
+	// --- Утверждение заявки (установка статуса) ---
 	err = s.vacationRepo.UpdateRequestStatusByID(requestID, models.StatusApproved)
 	if err != nil {
 		log.Printf("WARNING: Failed to set status 'Approved' for request %d (user %d, year %d), but days were likely spent on submission: %v\n", requestID, req.UserID, req.Year, err)
-		return fmt.Errorf("ошибка установки статуса 'Утверждена' для заявки %d: %w", requestID, err)
+		// В случае ошибки утверждения, не возвращаем конфликты, а только ошибку
+		return nil, fmt.Errorf("ошибка установки статуса 'Утверждена' для заявки %d: %w", requestID, err)
 	}
-	// TODO: Notify user
-	return nil
+
+	log.Printf("[ApproveVacationRequest] Successfully approved request %d. Returning %d conflicts as warnings.", requestID, len(conflicts))
+
+	// TODO: Notify user об утверждении
+
+	// Возвращаем найденные конфликты (если есть) и nil в качестве ошибки, т.к. утверждение прошло успешно
+	return conflicts, nil
 }
 
 // RejectVacationRequest отклоняет заявку

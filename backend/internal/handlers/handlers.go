@@ -370,27 +370,31 @@ func (h *AppHandler) ApproveVacationRequest(c *gin.Context) {
 		return
 	}
 
-	// Вызываем сервис для утверждения заявки
-	err = h.vacationService.ApproveVacationRequest(requestID, approverID.(int))
+	// Вызываем сервис для утверждения заявки, получаем конфликты и ошибку
+	conflicts, err := h.vacationService.ApproveVacationRequest(requestID, approverID.(int))
 	if err != nil {
+		// Обработка ошибок, возникших при утверждении (права, статус, ошибка БД и т.д.)
 		statusCode := http.StatusInternalServerError
 		errMsg := "Ошибка утверждения заявки: " + err.Error()
-		if err.Error() == "заявка не найдена" {
+		// Проверяем конкретные ошибки, чтобы вернуть правильный статус
+		errStr := err.Error()
+		if strings.Contains(errStr, "не найден") {
 			statusCode = http.StatusNotFound
-		} else if err.Error() == "недостаточно прав для утверждения этой заявки" {
+		} else if strings.Contains(errStr, "не имеет прав") {
 			statusCode = http.StatusForbidden
-		} else if strings.HasPrefix(err.Error(), "можно утвердить только заявку в статусе") || strings.HasPrefix(err.Error(), "недостаточно дней отпуска у сотрудника") {
+		} else if strings.Contains(errStr, "можно утвердить только заявку в статусе") {
 			statusCode = http.StatusBadRequest
-		} else if strings.Contains(err.Error(), "ошибка при списании дней из лимита") {
-			// Ошибка списания дней - критическая, но заявка уже утверждена
-			statusCode = http.StatusConflict // Используем 409 Conflict для индикации частичного успеха с проблемой
-			errMsg = "Заявка утверждена, но не удалось списать дни: " + err.Error()
 		}
 		c.JSON(statusCode, gin.H{"error": errMsg})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Заявка успешно утверждена"})
+	// Утверждение прошло успешно, возвращаем сообщение и конфликты (если есть)
+	response := gin.H{"message": "Заявка успешно утверждена"}
+	if len(conflicts) > 0 {
+		response["warnings"] = conflicts // Добавляем конфликты как предупреждения
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // RejectVacationRequest обработчик для отклонения заявки (менеджер/админ)
