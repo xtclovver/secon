@@ -14,16 +14,18 @@ import (
 
 // AuthService предоставляет методы для аутентификации пользователей
 type AuthService struct {
-	userRepo  repositories.UserRepositoryInterface // Используем интерфейс
-	jwtSecret string                               // Секрет для JWT
+	userRepo     repositories.UserRepositoryInterface // Используем интерфейс пользователя
+	vacationRepo VacationRepositoryInterface          // Добавляем интерфейс репозитория отпусков
+	jwtSecret    string                               // Секрет для JWT
 }
 
 // NewAuthService создает новый экземпляр AuthService
-// Принимаем интерфейс, а не конкретную реализацию
-func NewAuthService(userRepo repositories.UserRepositoryInterface, jwtSecret string) *AuthService {
+// Принимаем интерфейсы
+func NewAuthService(userRepo repositories.UserRepositoryInterface, vacationRepo VacationRepositoryInterface, jwtSecret string) *AuthService {
 	return &AuthService{
-		userRepo:  userRepo,
-		jwtSecret: jwtSecret,
+		userRepo:     userRepo,
+		vacationRepo: vacationRepo, // Сохраняем интерфейс
+		jwtSecret:    jwtSecret,
 	}
 }
 
@@ -152,7 +154,18 @@ func (s *AuthService) Register(username, password, fullName, email string, posit
 	// 3. Вызвать метод репозитория для создания пользователя
 	err = s.userRepo.CreateUser(newUser)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка создания пользователя в сервисе: %w", err)
+		return nil, fmt.Errorf("ошибка создания пользователя в репозитории: %w", err)
+	}
+
+	// 4. Установить начальный лимит отпуска (28 дней на текущий год)
+	// TODO: Вынести дефолтный лимит в конфигурацию
+	const defaultVacationLimit = 28
+	currentYear := time.Now().Year()
+	errLimit := s.vacationRepo.CreateOrUpdateVacationLimit(newUser.ID, currentYear, defaultVacationLimit)
+	if errLimit != nil {
+		// Логируем ошибку, но не прерываем регистрацию, т.к. пользователь создан.
+		// В реальном приложении может потребоваться более сложная обработка.
+		fmt.Printf("ВНИМАНИЕ: Пользователь %d создан, но не удалось установить начальный лимит отпуска (%d дней на %d год): %v\n", newUser.ID, defaultVacationLimit, currentYear, errLimit)
 	}
 
 	// Пароль уже очищен в репозитории после создания

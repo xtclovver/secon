@@ -33,7 +33,8 @@ func main() {
 	vacationRepo := repositories.NewVacationRepository(db)
 
 	// Создание сервисов
-	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
+	// Передаем оба репозитория в NewAuthService
+	authService := services.NewAuthService(userRepo, vacationRepo, cfg.JWT.Secret)
 	// Передаем оба репозитория в NewVacationService
 	vacationService := services.NewVacationService(vacationRepo, userRepo)
 	// Создаем UserService

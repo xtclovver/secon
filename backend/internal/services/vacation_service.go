@@ -3,8 +3,7 @@ package services
 import (
 	"errors"
 	"fmt" // Добавлен импорт fmt
-
-	// "log" // Убираем неиспользуемый импорт log
+	"log" // Добавляем импорт log
 	"time"
 
 	"vacation-scheduler/internal/models"
@@ -147,8 +146,8 @@ func (s *VacationService) ValidateVacationRequest(request *models.VacationReques
 			const defaultLimit = 28
 			availableDays = defaultLimit
 			// Не возвращаем ошибку, просто используем дефолтное значение
-		} else {
 			// Возвращаем другие ошибки (например, ошибка БД)
+			log.Printf("[Validation Error] UserID: %d, Year: %d - Error getting limit: %v", request.UserID, request.Year, err) // LOGGING
 			return fmt.Errorf("ошибка получения лимита отпуска: %w", err)
 		}
 	} else {
@@ -156,11 +155,20 @@ func (s *VacationService) ValidateVacationRequest(request *models.VacationReques
 		availableDays = limit.TotalDays - limit.UsedDays
 	}
 
+	// LOGGING: Log values just before the final check
+	log.Printf("[Validation Check] UserID: %d, Year: %d, TotalDaysLimit: %d, UsedDaysLimit: %d, CalculatedAvailable: %d, DaysRequestedInThisRequest: %d",
+		request.UserID, request.Year, limit.TotalDays, limit.UsedDays, availableDays, totalDays)
+
 	// Возвращено: Стандартная проверка, что запрошенные дни НЕ ПРЕВЫШАЮТ доступные
 	if totalDays > availableDays {
+		// LOGGING: Log the failure reason
+		log.Printf("[Validation Failed] UserID: %d, Year: %d - Limit exceeded: available %d, requested %d",
+			request.UserID, request.Year, availableDays, totalDays)
 		return fmt.Errorf("превышен доступный лимит дней отпуска: доступно %d, запрошено %d", availableDays, totalDays)
 	}
 
+	log.Printf("[Validation OK] UserID: %d, Year: %d - Limit check passed: available %d, requested %d",
+		request.UserID, request.Year, availableDays, totalDays) // LOGGING
 	return nil // Все проверки пройдены
 }
 
@@ -168,7 +176,14 @@ func (s *VacationService) ValidateVacationRequest(request *models.VacationReques
 func (s *VacationService) SaveVacationRequest(request *models.VacationRequest) error {
 	// Устанавливаем статус черновика, если не указан
 	if request.StatusID == 0 {
-		request.StatusID = 1 // Черновик
+		request.StatusID = models.StatusDraft
+	}
+
+	// Рассчитываем общее количество дней перед сохранением
+	// Репозиторий также делает это на всякий случай, но лучше здесь.
+	request.DaysRequested = 0 // Сбрасываем на случай повторного сохранения
+	for _, p := range request.Periods {
+		request.DaysRequested += p.DaysCount
 	}
 
 	// Используем vacationRepo
@@ -201,14 +216,62 @@ func (s *VacationService) SubmitVacationRequest(requestID int, userID int) error
 		return fmt.Errorf("ошибка валидации заявки перед отправкой: %w", err)
 	}
 
-	// 5. Обновляем статус на "На рассмотрении"
+	// 5. **Проверяем лимит и списываем дни ПРИ ОТПРАВКЕ (ПЕРЕД сменой статуса)**
+	// Используем DaysRequested, которое должно быть рассчитано при сохранении/получении
+	if req.DaysRequested <= 0 {
+		// Если дней 0 или меньше, лимит проверять и списывать не нужно
+		fmt.Printf("Предупреждение: Заявка ID %d отправляется с %d запрошенными днями.\n", requestID, req.DaysRequested)
+	} else {
+		limit, errLimit := s.vacationRepo.GetVacationLimit(req.UserID, req.Year)
+		limitNotFoundErrorMsg := "лимит отпуска не найден для данного пользователя и года"
+
+		if errLimit != nil && errLimit.Error() != limitNotFoundErrorMsg {
+			// Если ошибка не "не найден", это проблема с БД
+			return fmt.Errorf("ошибка получения лимита отпуска пользователя %d (год %d) перед отправкой заявки %d: %w", req.UserID, req.Year, requestID, errLimit)
+		}
+
+		availableDays := 0
+		if errLimit != nil && errLimit.Error() == limitNotFoundErrorMsg {
+			// Лимит не найден, используем дефолтный total для проверки
+			const defaultTotalDays = 28 // TODO: Вынести в конфиг
+			availableDays = defaultTotalDays
+		} else if limit != nil {
+			// Лимит найден
+			availableDays = limit.TotalDays - limit.UsedDays
+		}
+
+		if req.DaysRequested > availableDays {
+			return fmt.Errorf("недостаточно дней отпуска у пользователя %d (год %d) для отправки заявки %d: доступно %d, запрошено %d", req.UserID, req.Year, availableDays, req.DaysRequested, requestID)
+		}
+
+		// Пытаемся списать дни (увеличить used_days)
+		errSpend := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, req.DaysRequested)
+		if errSpend != nil {
+			// Если списать не удалось, НЕ отправляем заявку
+			return fmt.Errorf("ошибка списания %d дней из лимита пользователя %d (год %d) при отправке заявки %d: %w", req.DaysRequested, req.UserID, req.Year, requestID, errSpend)
+		}
+		fmt.Printf("Успешно списаны дни (%d) для заявки %d пользователя %d (год %d) при отправке.\n", req.DaysRequested, requestID, req.UserID, req.Year)
+
+	} // Конец блока if req.DaysRequested > 0
+
+	// 6. Обновляем статус на "На рассмотрении" (ТОЛЬКО если все предыдущие шаги успешны)
 	err = s.vacationRepo.UpdateRequestStatusByID(requestID, models.StatusPending)
 	if err != nil {
-		return fmt.Errorf("ошибка обновления статуса заявки на 'На рассмотрении': %w", err)
+		// Если не удалось обновить статус, НО дни уже были списаны, нужно их вернуть!
+		if req.DaysRequested > 0 { // Проверяем, были ли дни для списания/возврата
+			fmt.Printf("КРИТИЧЕСКАЯ ОШИБКА: Дни (%d) для заявки %d пользователя %d (год %d) были списаны, но НЕ удалось установить статус 'На рассмотрении'. Попытка вернуть дни...\n", req.DaysRequested, requestID, req.UserID, req.Year)
+			revertErr := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -req.DaysRequested) // Возвращаем дни
+			if revertErr != nil {
+				fmt.Printf("КРИТИЧЕСКАЯ ОШИБКА: НЕ удалось вернуть списанные дни (%d) для заявки %d пользователя %d (год %d) после неудачной отправки: %v\n", req.DaysRequested, requestID, req.UserID, req.Year, revertErr)
+				// Алертинг!
+			} else {
+				fmt.Printf("Успешно возвращены дни (%d) для заявки %d пользователя %d (год %d) после неудачной отправки.\n", req.DaysRequested, requestID, req.UserID, req.Year)
+			}
+		}
+		return fmt.Errorf("ошибка установки статуса 'На рассмотрении' для заявки %d (дни могли быть списаны): %w", requestID, err)
 	}
 
 	// TODO: Опционально: Уведомить менеджера о новой заявке
-
 	return nil
 }
 
@@ -386,7 +449,7 @@ func (s *VacationService) CancelVacationRequest(requestID int, cancellingUserID 
 	// 3. Проверяем текущий статус заявки (можно ли ее отменить)
 	// Отменять можно Черновик, На рассмотрении, Утверждена. Нельзя отменять уже Отклоненную или Отмененную.
 	if req.StatusID == models.StatusRejected || req.StatusID == models.StatusCancelled {
-		return fmt.Errorf("нельзя отменить заявку в статусе '%d'", req.StatusID)
+		return fmt.Errorf("нельзя отменить заявку ID %d в статусе '%d'", requestID, req.StatusID)
 	}
 
 	originalStatus := req.StatusID // Запоминаем исходный статус для возврата дней
@@ -394,24 +457,24 @@ func (s *VacationService) CancelVacationRequest(requestID int, cancellingUserID 
 	// 4. Обновляем статус на "Отменена"
 	err = s.vacationRepo.UpdateRequestStatusByID(requestID, models.StatusCancelled)
 	if err != nil {
-		return fmt.Errorf("ошибка установки статуса 'Отменена': %w", err)
+		return fmt.Errorf("ошибка установки статуса 'Отменена' для заявки %d: %w", requestID, err)
 	}
 
-	// 5. Возвращаем дни в лимит, если отменяется УТВЕРЖДЕННАЯ заявка
-	if originalStatus == models.StatusApproved {
-		totalDaysToReturn := 0
-		for _, p := range req.Periods {
-			totalDaysToReturn += p.DaysCount
-		}
-		if totalDaysToReturn > 0 {
-			err = s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -totalDaysToReturn)
-			if err != nil {
+	// 5. Возвращаем дни в лимит, если отменяется заявка, которая была НА РАССМОТРЕНИИ или УТВЕРЖДЕНА
+	// (т.е. дни были списаны при отправке)
+	if originalStatus == models.StatusPending || originalStatus == models.StatusApproved {
+		daysToReturn := req.DaysRequested // Используем сохраненное значение
+		if daysToReturn > 0 {
+			errReturn := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -daysToReturn) // Возвращаем дни
+			if errReturn != nil {
 				// Логируем ошибку, но сама отмена уже произошла.
-				fmt.Printf("ВНИМАНИЕ: Не удалось вернуть %d дней в лимит пользователя %d (год %d) при отмене заявки %d: %v\n", totalDaysToReturn, req.UserID, req.Year, requestID, err)
-				// Возможно, стоит добавить механизм повторной попытки или уведомление администратору.
+				fmt.Printf("ВНИМАНИЕ: Заявка %d отменена, но не удалось вернуть %d дней в лимит пользователя %d (год %d): %v\n", requestID, daysToReturn, req.UserID, req.Year, errReturn)
+				// TODO: Механизм компенсации или уведомления.
+			} else {
+				fmt.Printf("Успешно возвращены дни (%d) для заявки %d пользователя %d (год %d) при отмене.\n", daysToReturn, requestID, req.UserID, req.Year)
 			}
 		}
-	}
+	} // Конец if originalStatus == Pending || Approved
 
 	// TODO: Отправить уведомление пользователю об отмене заявки (особенно если отменил не он сам)
 
@@ -462,67 +525,16 @@ func (s *VacationService) ApproveVacationRequest(requestID int, approverID int) 
 		return fmt.Errorf("можно утвердить только заявку ID %d в статусе 'На рассмотрении' (текущий статус: %d)", requestID, req.StatusID)
 	}
 
-	// 4. Рассчитываем общее количество запрашиваемых дней
-	totalDaysRequested := 0
-	for _, p := range req.Periods {
-		totalDaysRequested += p.DaysCount
-	}
-	if totalDaysRequested <= 0 {
-		// Это странно, но формально утверждать можно. Либо вернуть ошибку?
-		// Пока просто предупредим и не будем трогать лимит.
-		fmt.Printf("Предупреждение: Заявка ID %d утверждена с 0 запрашиваемых дней.\n", requestID)
-	}
-
-	// 5. Проверяем доступный лимит дней и пытаемся списать дни ПЕРЕД сменой статуса
-	if totalDaysRequested > 0 {
-		// Сначала получаем текущий лимит, чтобы убедиться, что дней хватает
-		limit, err := s.vacationRepo.GetVacationLimit(req.UserID, req.Year)
-		if err != nil {
-			// Проверяем, является ли ошибка "лимит не найден" по тексту
-			limitNotFoundErrorMsg := "лимит отпуска не найден для данного пользователя и года"
-			if err.Error() != limitNotFoundErrorMsg {
-				// Если это другая ошибка, возвращаем ее
-				return fmt.Errorf("ошибка получения лимита отпуска пользователя %d (год %d) перед утверждением заявки %d: %w", req.UserID, req.Year, requestID, err)
-			}
-			// Лимит не найден. UpdateVacationLimitUsedDays теперь умеет создавать лимит,
-			// но нам все равно нужно проверить, хватит ли дней с учетом дефолтного лимита.
-			// TODO: Вынести дефолтный лимит в конфигурацию
-			const defaultTotalDays = 28
-			if totalDaysRequested > defaultTotalDays {
-				return fmt.Errorf("недостаточно дней отпуска у пользователя %d (год %d): доступно %d (лимит не создан), запрошено %d в заявке %d", req.UserID, req.Year, defaultTotalDays, totalDaysRequested, requestID)
-			}
-			// Продолжаем, полагаясь, что UpdateVacationLimitUsedDays создаст лимит
-		} else {
-			// Лимит найден, проверяем доступные дни
-			availableDays := limit.TotalDays - limit.UsedDays
-			if totalDaysRequested > availableDays {
-				return fmt.Errorf("недостаточно дней отпуска у пользователя %d (год %d): доступно %d, запрошено %d в заявке %d", req.UserID, req.Year, availableDays, totalDaysRequested, requestID)
-			}
-		}
-
-		// Пытаемся списать дни (увеличить used_days)
-		err = s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, totalDaysRequested) // Передаем положительное число для списания
-		if err != nil {
-			// Если здесь ошибка (включая "не найден", если репозиторий не создал), то НЕ утверждаем заявку
-			return fmt.Errorf("ошибка списания %d дней из лимита пользователя %d (год %d) при утверждении заявки %d: %w", totalDaysRequested, req.UserID, req.Year, requestID, err)
-		}
-	} // Конец блока if totalDaysRequested > 0
-
-	// 6. Если списание дней прошло успешно (или не требовалось), обновляем статус заявки на "Утверждена"
+	// 4. Обновляем статус заявки на "Утверждена"
+	// Дни уже были списаны при отправке (SubmitVacationRequest), поэтому здесь только меняем статус.
 	err = s.vacationRepo.UpdateRequestStatusByID(requestID, models.StatusApproved)
 	if err != nil {
-		// Если не удалось обновить статус, НО дни уже списаны, нам нужно их вернуть!
-		if totalDaysRequested > 0 {
-			fmt.Printf("КРИТИЧЕСКАЯ ОШИБКА: Дни (%d) для заявки %d пользователя %d (год %d) были списаны, но НЕ удалось установить статус 'Утверждена'. Попытка вернуть дни...\n", totalDaysRequested, requestID, req.UserID, req.Year)
-			revertErr := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -totalDaysRequested) // Возвращаем дни
-			if revertErr != nil {
-				fmt.Printf("КРИТИЧЕСКАЯ ОШИБКА: НЕ удалось вернуть списанные дни (%d) для заявки %d пользователя %d (год %d) после неудачного обновления статуса: %v\n", totalDaysRequested, requestID, req.UserID, req.Year, revertErr)
-				// Здесь нужно алертить администраторов!
-			} else {
-				fmt.Printf("Успешно возвращены дни (%d) для заявки %d пользователя %d (год %d) после неудачного обновления статуса.\n", totalDaysRequested, requestID, req.UserID, req.Year)
-			}
-		}
-		return fmt.Errorf("ошибка установки статуса 'Утверждена' для заявки %d (дни могли быть списаны): %w", requestID, err)
+		// Если не удалось обновить статус, дни остаются списанными.
+		// Это не идеальная ситуация, но и откат дней здесь был бы неверным,
+		// так как заявка фактически могла быть утверждена (например, устно),
+		// а проблема только в записи статуса. Логируем ошибку.
+		fmt.Printf("ВНИМАНИЕ: Не удалось установить статус 'Утверждена' для заявки %d (пользователь %d, год %d), хотя дни были списаны при отправке: %v\n", requestID, req.UserID, req.Year, err)
+		return fmt.Errorf("ошибка установки статуса 'Утверждена' для заявки %d: %w", requestID, err)
 	}
 
 	// TODO: Отправить уведомление пользователю об утверждении заявки
@@ -531,7 +543,7 @@ func (s *VacationService) ApproveVacationRequest(requestID int, approverID int) 
 }
 
 // RejectVacationRequest отклоняет заявку (менеджер/админ)
-// При отклонении заявки в статусе Pending дни НЕ возвращаются, так как они не были списаны.
+// При отклонении заявки из статуса "На рассмотрении" (Pending), ранее списанные дни возвращаются пользователю.
 func (s *VacationService) RejectVacationRequest(requestID int, rejecterID int, reason string) error {
 	// 1. Получаем заявку
 	req, err := s.vacationRepo.GetVacationRequestByID(requestID)
@@ -572,23 +584,29 @@ func (s *VacationService) RejectVacationRequest(requestID int, rejecterID int, r
 		return fmt.Errorf("можно отклонить только заявку ID %d в статусе 'На рассмотрении' (текущий статус: %d)", requestID, req.StatusID)
 	}
 
-	// 4. Обновляем статус заявки на "Отклонена"
+	// 4. Обновляем статус заявки на "Отклонена" ПЕРЕД возвратом дней
 	err = s.vacationRepo.UpdateRequestStatusByID(requestID, models.StatusRejected)
 	if err != nil {
 		return fmt.Errorf("ошибка установки статуса 'Отклонена' для заявки %d: %w", requestID, err)
 	}
 
-	// 5. Добавляем комментарий с причиной отклонения (если нужно)
-	// TODO: Решить, как хранить причину отклонения. Пока можно добавить в comment заявки.
-	// Если reason не пустая, можно обновить комментарий заявки.
-	// Но UpdateVacationRequest требует UserID владельца. Нужно либо изменить его,
-	// либо добавить новый метод в репозиторий UpdateRequestCommentByID(requestID, comment).
-	// Пока оставляем без обновления комментария.
+	// 5. Возвращаем списанные при отправке дни
+	daysToReturn := req.DaysRequested
+	if daysToReturn > 0 {
+		fmt.Printf("RejectVacationRequest: Попытка возврата %d дней для заявки %d (пользователь %d, год %d)\n", daysToReturn, requestID, req.UserID, req.Year) // Добавлено логирование
+		errReturn := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -daysToReturn)                                                           // Возвращаем дни
+		if errReturn != nil {
+			// Статус уже "Отклонена", но дни вернуть не удалось. Логируем подробнее.
+			fmt.Printf("КРИТИЧЕСКАЯ ОШИБКА: Заявка %d отклонена, но НЕ удалось вернуть %d дней в лимит пользователя %d (год %d): %v\n", requestID, daysToReturn, req.UserID, req.Year, errReturn)
+			// ВАЖНО: Возвращаем ошибку пользователю, чтобы он знал о проблеме с возвратом дней!
+			return fmt.Errorf("заявка отклонена, но произошла ошибка при возврате дней в лимит: %w", errReturn)
+		} else {
+			fmt.Printf("Успешно возвращены дни (%d) для заявки %d пользователя %d (год %d) при отклонении.\n", daysToReturn, requestID, req.UserID, req.Year)
+		}
+	}
 
-	// 6. Возвращаем дни, если заявка была *ранее утверждена* (маловероятно в текущем потоке, но для полноты)
-	// В текущей логике мы отклоняем только StatusPending, поэтому возврат дней не нужен.
-	// Если бы логика позволяла отклонять StatusApproved, здесь был бы код возврата дней,
-	// аналогичный CancelVacationRequest.
+	// 6. Добавляем комментарий с причиной отклонения (если нужно)
+	// TODO: Реализовать сохранение причины отклонения, если она передана.
 
 	// TODO: Отправить уведомление пользователю об отклонении заявки
 

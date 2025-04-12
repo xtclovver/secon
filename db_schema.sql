@@ -66,6 +66,7 @@ CREATE TABLE vacation_requests (
     user_id INT NOT NULL,
     year INT NOT NULL,
     status_id INT NOT NULL,
+    days_requested INT NOT NULL DEFAULT 0, -- Добавлено поле для хранения запрошенных дней
     comment TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
