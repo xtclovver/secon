@@ -203,7 +203,7 @@ func (r *UserRepository) UpdateUser(userID int, updateData *models.UserUpdateDTO
 
 	// Динамически строим запрос
 	if updateData.FullName != nil {
-		query += fmt.Sprintf("full_name = ?%d, ", argID)
+		query += "full_name = ?, " // Используем стандартный плейсхолдер '?'
 		args = append(args, *updateData.FullName)
 		argID++
 	}
@@ -212,12 +212,12 @@ func (r *UserRepository) UpdateUser(userID int, updateData *models.UserUpdateDTO
 		if err != nil {
 			return fmt.Errorf("ошибка хеширования нового пароля: %w", err)
 		}
-		query += fmt.Sprintf("password = ?%d, ", argID)
+		query += "password = ?, " // Используем стандартный плейсхолдер '?'
 		args = append(args, string(hashedPassword))
 		argID++
 	}
 	if updateData.PositionID != nil {
-		query += fmt.Sprintf("position_id = ?%d, ", argID)
+		query += "position_id = ?, " // Используем стандартный плейсхолдер '?'
 		args = append(args, *updateData.PositionID)
 		argID++
 	}
@@ -228,9 +228,9 @@ func (r *UserRepository) UpdateUser(userID int, updateData *models.UserUpdateDTO
 	}
 
 	// Добавляем обновление времени и условие WHERE
-	query += "updated_at = CURRENT_TIMESTAMP "
-	query += fmt.Sprintf("WHERE id = ?%d", argID)
-	args = append(args, userID)
+	query += "updated_at = CURRENT_TIMESTAMP " // Пробел перед WHERE важен
+	query += "WHERE id = ?"                    // Используем стандартный плейсхолдер '?'
+	args = append(args, userID)                // Добавляем ID пользователя в конец списка аргументов
 
 	// Заменяем плейсхолдеры MySQL (?) на плейсхолдеры PostgreSQL ($) если нужно
 	// query = strings.ReplaceAll(query, "?", "$") // Раскомментировать для PostgreSQL

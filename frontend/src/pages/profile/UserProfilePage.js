@@ -237,7 +237,7 @@ function UserProfilePage() {
            const hasChanges = hasNameChanged || hasPasswordChanged; // || hasPositionChanged;
 
            return (
-              <button type="submit" disabled={isLoading || !hasChanges}>
+              <button type="submit" className="save-button" disabled={isLoading || !hasChanges}>
                 {isLoading ? <Loader size="small" /> : 'Сохранить изменения'}
               </button>
            );
