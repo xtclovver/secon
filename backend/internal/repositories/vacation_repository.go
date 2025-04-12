@@ -72,27 +72,37 @@ func (r *VacationRepository) CreateOrUpdateVacationLimit(userID int, year int, t
 	return nil
 }
 
-// UpdateVacationLimitUsedDays атомарно обновляет использованные дни, создавая лимит при необходимости.
+// UpdateVacationLimitUsedDays атомарно обновляет использованные дни для СУЩЕСТВУЮЩЕГО лимита.
+// Не создает лимит, если он отсутствует.
 // daysDelta может быть положительным (списание) или отрицательным (возврат).
 func (r *VacationRepository) UpdateVacationLimitUsedDays(userID int, year int, daysDelta int) error {
-	// TODO: Вынести дефолтное значение total_days (28) в конфигурацию
-	const defaultTotalDays = 28
 	log.Printf("[Repo UpdateUsedDays] Attempting update. UserID: %d, Year: %d, Delta: %d", userID, year, daysDelta) // LOGGING
 
-	// Используем INSERT ... ON DUPLICATE KEY UPDATE для атомарного создания/обновления.
+	// Используем простой UPDATE. Если строка не найдена, вернется ошибка rowsAffected == 0.
 	query := `
-		INSERT INTO vacation_limits (user_id, year, total_days, used_days, created_at, updated_at) 
-		VALUES (?, ?, ?, GREATEST(0, ?), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) -- Параметры 1-4 для INSERT
-		ON DUPLICATE KEY UPDATE 
-			used_days = GREATEST(0, used_days + ?), -- Используем ПЯТЫЙ параметр (?) для UPDATE
-			updated_at = CURRENT_TIMESTAMP`
-	// total_days не трогаем при обновлении used_days
+		UPDATE vacation_limits 
+		SET 
+			used_days = GREATEST(0, used_days + ?), -- Используем параметр (?) для UPDATE
+			updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = ? AND year = ?`
 
-	// Передаем daysDelta ДВАЖДЫ: 4-й параметр для INSERT, 5-й параметр для UPDATE
-	_, err := r.db.Exec(query, userID, year, defaultTotalDays, daysDelta, daysDelta)
+	result, err := r.db.Exec(query, daysDelta, userID, year)
 	if err != nil {
 		log.Printf("[Repo UpdateUsedDays] DB Exec Error. UserID: %d, Year: %d, Delta: %d, Error: %v", userID, year, daysDelta, err) // LOGGING
-		return fmt.Errorf("ошибка атомарного обновления used_days (user: %d, year: %d, delta: %d): %w", userID, year, daysDelta, err)
+		return fmt.Errorf("ошибка обновления used_days (user: %d, year: %d, delta: %d): %w", userID, year, daysDelta, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("[Repo UpdateUsedDays] Error getting rows affected. UserID: %d, Year: %d, Delta: %d, Error: %v", userID, year, daysDelta, err) // LOGGING
+		return fmt.Errorf("ошибка получения кол-ва строк при обновлении used_days (user: %d, year: %d, delta: %d): %w", userID, year, daysDelta, err)
+	}
+
+	if rowsAffected == 0 {
+		log.Printf("[Repo UpdateUsedDays] Update failed - Limit not found. UserID: %d, Year: %d", userID, year) // LOGGING
+		// Возвращаем ошибку, совместимую с той, что ожидает сервис GetVacationLimit,
+		// чтобы вышестоящий код мог понять, что лимит отсутствует.
+		return errors.New("лимит отпуска не найден для данного пользователя и года")
 	}
 
 	log.Printf("[Repo UpdateUsedDays] DB Exec Success. UserID: %d, Year: %d, Delta: %d", userID, year, daysDelta) // LOGGING
