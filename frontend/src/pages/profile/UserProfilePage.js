@@ -146,15 +146,20 @@ function UserProfilePage() {
     <div className="profile-page">
       <h2>Профиль пользователя</h2>
       <div className="profile-info">
-        <p><strong>Имя пользователя:</strong> {currentUser.username}</p>
-        <p><strong>Email:</strong> {currentUser.email}</p>
+        {/* Заменено "Имя пользователя" на "ФИО" и отображается fullName */}
+        <p><strong>ФИО:</strong> {currentUser.fullName || currentUser.username}</p> {/* Отображаем ФИО, username как запасной вариант */}
+        {/* Email убран по запросу */}
         {/* TODO: Отобразить название отдела, если оно будет добавлено */}
         {/* <p><strong>Отдел:</strong> {currentUser.department_name || 'Не указан'}</p> */}
-        <p><strong>Должность:</strong> {currentUser.positionName || 'Не указана'}</p> {/* Отображаем должность */}
+        <p>
+            <strong>Должность:</strong>{' '}
+            <span className={`user-position-badge ${getPositionLevelClass(currentUser.positionName)}`}>
+                {currentUser.positionName || 'Не указана'}
+            </span>
+        </p>
         <p><strong>Дата создания:</strong> {new Date(currentUser.created_at).toLocaleString()}</p>
         <p><strong>Дата обновления:</strong> {new Date(currentUser.updated_at).toLocaleString()}</p>
-        {/* Возвращаем isAdmin и isManager */}
-        <p><strong>Роли:</strong> {[currentUser.isAdmin && 'Администратор', currentUser.isManager && 'Руководитель', !currentUser.isAdmin && !currentUser.isManager && 'Сотрудник'].filter(Boolean).join(', ') || 'Сотрудник'}</p> 
+        {/* Роли убраны, отображается должность */}
       </div>
 
       <form onSubmit={handleSubmit} className="profile-form">
@@ -246,5 +251,21 @@ function UserProfilePage() {
     </div>
   );
 }
+
+// Вспомогательная функция для определения класса стиля должности
+const getPositionLevelClass = (positionName) => {
+  if (!positionName) return 'position-level-0'; // По умолчанию
+  const lowerPos = positionName.toLowerCase();
+  // Уровни важности (можно настроить)
+  if (lowerPos.includes('директор') || lowerPos.includes('руководитель') || lowerPos.includes('начальник')) {
+    return 'position-level-3'; // Красный
+  } else if (lowerPos.includes('менеджер') || lowerPos.includes('ведущий') || lowerPos.includes('старший')) {
+    return 'position-level-2'; // Оранжевый
+  } else if (lowerPos.includes('специалист') || lowerPos.includes('инженер') || lowerPos.includes('бухгалтер')) {
+     return 'position-level-1'; // Желтый
+  } else {
+    return 'position-level-0'; // Синий (обычный сотрудник)
+  }
+};
 
 export default UserProfilePage;

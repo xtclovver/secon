@@ -43,6 +43,13 @@
   --animation-slide-in: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --animation-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55);
   --animation-elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+
+  /* Цвета для значка должности */
+  --position-level-0-bg: #0d6efd; /* Синий (как accent-color) */
+  --position-level-1-bg: #ffc107; /* Желтый (как warning-color) */
+  --position-level-2-bg: #fd7e14; /* Оранжевый */
+  --position-level-3-bg: #dc3545; /* Красный (как danger-color) */
+  --position-badge-text: #ffffff; /* Белый текст для всех значков */
 }
 
 /* Темная тема */
@@ -63,7 +70,15 @@
   --warning-color: #ffca2c; /* Чуть ярче желтый */
   --danger-color: #e74c3c; /* Чуть ярче красный */
   --info-color: #34d3eb; /* Чуть ярче голубой */
-  
+
+  /* Цвета для значка должности (темная тема - можно оставить такими же или сделать чуть ярче) */
+  --position-level-0-bg: #3d8bfd; /* Светлее синий */
+  --position-level-1-bg: #ffca2c; /* Ярче желтый */
+  --position-level-2-bg: #ff983b; /* Ярче оранжевый */
+  --position-level-3-bg: #e74c3c; /* Ярче красный */
+  --position-badge-text: #121212; /* Темный текст для светлых значков в темной теме (особенно желтый/оранжевый) */
+  /* Или оставить белый текст: --position-badge-text: #ffffff; */
+
   /* Тени для темной темы (менее заметные) */
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.3);
