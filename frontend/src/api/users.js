@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Получаем базовый URL API из переменных окружения или используем дефолтное значение
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+// Используем относительный URL для API, чтобы Nginx мог его проксировать
+// Если REACT_APP_API_URL установлена, она будет использована.
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 // Создаем экземпляр axios с базовым URL и настройками
 const apiClient = axios.create({
