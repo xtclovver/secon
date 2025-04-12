@@ -1,0 +1,220 @@
+/* Импорт переменных темы */
+@import '../../styles/variables.css';
+
+.vacation-form-container {
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 20px;
+}
+
+.vacation-form-container h2 {
+  text-align: center;
+  margin-bottom: 30px;
+  color: var(--text-primary);
+}
+
+.year-selector {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.year-selector label {
+  margin-bottom: 0; /* Убираем нижний отступ у label */
+}
+
+.year-selector select {
+  width: auto; /* Уменьшаем ширину select */
+  min-width: 150px;
+}
+
+.loading-indicator {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.vacation-limits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 15px; /* Добавлен внутренний отступ */
+  border: 1px solid var(--border-color); /* Добавлена рамка */
+}
+
+.limit-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--border-radius-md);
+}
+
+.limit-item span:first-child {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
+.limit-value {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.limit-value.error {
+  color: var(--danger-color);
+}
+
+.vacation-period {
+  margin-bottom: 25px;
+  padding: 20px; /* Добавлен внутренний отступ */
+  border: 1px solid var(--border-color); /* Добавлена рамка */
+}
+
+.vacation-period h3 {
+  margin-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.date-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.date-field label {
+  font-size: 0.9rem;
+}
+
+.date-picker-container {
+  position: relative;
+}
+
+.date-input {
+  padding-right: 35px; /* Место для иконки */
+}
+
+.date-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none; /* Иконка не должна перехватывать клики */
+}
+
+/* Стили для react-datepicker */
+.react-datepicker-wrapper {
+  width: 100%;
+}
+
+.react-datepicker__input-container input {
+  width: 100%;
+}
+
+.react-datepicker {
+  font-family: inherit !important;
+  border-radius: var(--border-radius-md) !important;
+  border-color: var(--border-color) !important;
+}
+
+.react-datepicker__header {
+  background-color: var(--bg-tertiary) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker-year-header {
+  color: var(--text-primary) !important;
+}
+
+.react-datepicker__day-name,
+.react-datepicker__day,
+.react-datepicker__time-name {
+  color: var(--text-primary) !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--in-selecting-range,
+.react-datepicker__day--in-range {
+  background-color: var(--accent-color) !important;
+  color: white !important;
+}
+
+.react-datepicker__day--keyboard-selected {
+   background-color: var(--accent-hover) !important;
+   color: white !important;
+}
+
+.react-datepicker__day--disabled {
+  color: var(--text-tertiary) !important;
+  opacity: 0.5;
+}
+
+.days-count {
+  margin-bottom: 15px;
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.days-count strong {
+  color: var(--text-primary);
+  font-weight: bold;
+}
+
+.remove-period {
+  display: inline-flex; /* Для выравнивания иконки и текста */
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-top: 30px;
+  flex-wrap: wrap; /* Перенос кнопок на новую строку при необходимости */
+}
+
+.form-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.success-message {
+  background-color: rgba(25, 135, 84, 0.1);
+  color: var(--success-color);
+  padding: 1rem;
+  border-radius: var(--border-radius-md);
+  margin-top: 20px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Адаптивность */
+@media (max-width: 600px) {
+  .date-inputs {
+    grid-template-columns: 1fr; /* Даты друг под другом */
+  }
+
+  .vacation-limits {
+     grid-template-columns: 1fr 1fr; /* Два элемента в ряд */
+  }
+
+  .form-actions {
+    justify-content: center; /* Центрируем кнопки на маленьких экранах */
+  }
+}

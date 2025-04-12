@@ -1,0 +1,271 @@
+/* Импорт файла переменных темы */
+@import './variables.css';
+
+/* Сброс стилей и базовые настройки */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth; /* Плавная прокрутка */
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  min-height: 100vh;
+  line-height: 1.6; /* Улучшаем читаемость текста */
+}
+
+/* Структура приложения */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-container {
+  display: flex;
+  flex: 1; /* Занимает все доступное пространство по высоте */
+  padding-top: var(--header-height); /* Отступ сверху для фиксированного хедера */
+}
+
+.app-content {
+  flex: 1; /* Основной контент занимает оставшееся место */
+  padding: 25px; /* Внутренние отступы для контента */
+  margin-left: var(--sidebar-width); /* Отступ слева для сайдбара */
+  transition: margin-left var(--transition-normal);
+  overflow-y: auto; /* Добавляем скролл для контента, если он не помещается */
+}
+
+/* Сдвиг контента при свернутом сайдбаре */
+.sidebar.collapsed ~ .app-container .app-content {
+  margin-left: var(--sidebar-width-collapsed);
+}
+
+/* Стили для заголовков */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  margin-bottom: 0.75em; /* Немного увеличим отступ */
+  font-weight: 500; /* Сделаем заголовки чуть жирнее */
+}
+
+h1 { font-size: 2.2rem; }
+h2 { font-size: 1.8rem; }
+h3 { font-size: 1.5rem; }
+h4 { font-size: 1.2rem; }
+
+/* Стили для ссылок */
+a {
+  color: var(--accent-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline; /* Добавим подчеркивание при наведении */
+}
+
+/* Стили для кнопок */
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 1.2rem; /* Немного увеличим паддинги */
+  border-radius: var(--border-radius-md);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent; /* Добавим рамку для консистентности */
+  white-space: nowrap; /* Предотвращаем перенос текста на кнопке */
+}
+
+.btn svg { /* Стили для иконок внутри кнопок */
+  margin-right: 8px;
+}
+
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  pointer-events: none; /* Отключаем события мыши для заблокированной кнопки */
+}
+
+/* Варианты кнопок */
+.btn-primary { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
+.btn-primary:hover { background-color: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-success { background-color: var(--success-color); color: white; border-color: var(--success-color); }
+.btn-success:hover { background-color: #157347; border-color: #146c43; } /* Чуть темнее зеленый */
+
+.btn-danger { background-color: var(--danger-color); color: white; border-color: var(--danger-color); }
+.btn-danger:hover { background-color: #bb2d3b; border-color: #b02a37; } /* Чуть темнее красный */
+
+.btn-warning { background-color: var(--warning-color); color: #333; border-color: var(--warning-color); }
+.btn-warning:hover { background-color: #ffcd39; border-color: #ffc720; } /* Чуть темнее желтый */
+
+.btn-secondary { background-color: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color); }
+.btn-secondary:hover { background-color: #d3d9df; border-color: #c6cfd6; } /* Чуть темнее серый */
+
+/* Стили для форм */
+form {
+  margin-bottom: 1.5rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+textarea {
+  min-height: 100px; /* Минимальная высота для textarea */
+  resize: vertical; /* Разрешаем изменять размер только по вертикали */
+}
+select {
+  appearance: none; /* Убираем стандартный вид селекта */
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 16px 12px;
+  padding-right: 2.5rem; /* Место для стрелки */
+}
+[data-theme="dark"] select { /* Стрелка для темной темы */
+   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23adb5bd' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+}
+
+/* Стили для загрузчика (предполагается компонент Loader) */
+.loader-overlay { /* Для полноэкранного лоадера */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+[data-theme="dark"] .loader-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* Стили для сообщений об ошибках */
+.error-message {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--danger-color);
+  padding: 0.8rem 1rem;
+  border-radius: var(--border-radius-md);
+  margin-bottom: 1rem;
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  font-size: 0.9rem;
+}
+
+/* Стили для карточек */
+.card {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border-color);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.card:hover {
+  /* transform: translateY(-3px); */ /* Убрал небольшой подъем */
+  box-shadow: var(--shadow-lg);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .app-container {
+     padding-top: var(--header-height); /* Убедимся, что отступ есть */
+  }
+  .app-content {
+    margin-left: 0; /* Убираем отступ для контента */
+    padding: 15px; /* Уменьшаем паддинги */
+  }
+  /* Стили для мобильного сайдбара обрабатываются в Sidebar.css */
+}
+
+/* Стили для react-toastify */
+.Toastify__toast {
+  border-radius: var(--border-radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+.Toastify__toast--success {
+  background-color: var(--success-color) !important;
+}
+.Toastify__toast--error {
+  background-color: var(--danger-color) !important;
+}
+.Toastify__toast--warning {
+  background-color: var(--warning-color) !important;
+  color: #333 !important; /* Темный текст для желтого */
+}
+.Toastify__toast--info {
+  background-color: var(--info-color) !important;
+}
+.Toastify__close-button {
+  color: white !important;
+  opacity: 0.8 !important;
+}
+.Toastify__close-button:hover {
+  opacity: 1 !important;
+}
+[data-theme="dark"] .Toastify__toast {
+   background-color: var(--bg-tertiary) !important;
+   color: var(--text-primary) !important;
+}
+[data-theme="dark"] .Toastify__toast--success {
+  background-color: var(--success-color) !important;
+  color: white !important;
+}
+/* ... (аналогично для других типов уведомлений в темной теме) */
+
+/* Анимации (примеры) */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

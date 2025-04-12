@@ -1,0 +1,89 @@
+.theme-toggle {
+  display: inline-block;
+  cursor: pointer;
+  user-select: none;
+  margin-right: 15px;
+}
+
+.toggle-track {
+  width: 48px;
+  height: 24px;
+  border-radius: 30px;
+  background-color: #cbd5e0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  transition: background-color 0.3s ease;
+}
+
+.toggle-thumb {
+  position: absolute;
+  left: 2px; /* Начальное положение для светлой темы */
+  top: 2px; /* Добавлено для вертикального центрирования */
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, background-color 0.3s ease;
+}
+
+.toggle-icon {
+  color: #ffffff;
+  font-size: 12px;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+  display: flex; /* Добавлено для центрирования иконки */
+  align-items: center; /* Добавлено для центрирования иконки */
+  justify-content: center; /* Добавлено для центрирования иконки */
+  height: 100%; /* Добавлено для центрирования иконки */
+}
+
+.toggle-icon.sun {
+  color: #f6ad55;
+  /* margin-left: 2px; - убрано, позиционирование через flex */
+}
+
+.toggle-icon.moon {
+  color: #a0aec0;
+ /* margin-right: 2px; - убрано, позиционирование через flex */
+}
+
+/* Темная тема */
+[data-theme="dark"] .toggle-track {
+  background-color: #2d3748;
+}
+
+/* Смещение для темной темы */
+[data-theme="dark"] .toggle-thumb {
+  background-color: #1a202c;
+  transform: translateX(24px); /* 48px (ширина) - 20px (ширина кружка) - 2*2px (отступы) = 24px */
+}
+
+[data-theme="dark"] .toggle-icon.sun {
+  opacity: 0.2;
+}
+
+[data-theme="dark"] .toggle-icon.moon {
+  opacity: 1;
+}
+
+/* Анимация при наведении */
+.theme-toggle:hover .toggle-track {
+  filter: brightness(1.1);
+}
+
+.theme-toggle:hover .toggle-thumb {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+/* Анимация при нажатии (скорректировано смещение) */
+.theme-toggle:active .toggle-thumb {
+  transform: scale(0.95) translateX(0); /* Для светлой темы */
+}
+
+[data-theme="dark"] .theme-toggle:active .toggle-thumb {
+  transform: scale(0.95) translateX(24px); /* Для темной темы */
+}
