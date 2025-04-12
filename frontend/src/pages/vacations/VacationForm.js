@@ -431,7 +431,7 @@ const VacationForm = () => {
             }
           >
             {submitting ? <Loader size="small" inline /> : <FaPaperPlane />}
-            {submitting ? ' Отправка...' : ' Отправить руководителю'}
+            {submitting ? ' Отправка...' : ' Отправить'}
           </motion.button>
         </div>
       </form>
