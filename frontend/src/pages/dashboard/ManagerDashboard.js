@@ -3,13 +3,13 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import Calendar from 'react-calendar';
 import { FaExclamationTriangle, FaCheck, FaUser, FaCalendarAlt } from 'react-icons/fa';
-import { getDepartmentVacations, getVacationIntersections } from '../../api/vacations'; // Предполагается, что API файл будет создан
+import { getUnitVacations, getVacationIntersections } from '../../api/vacations'; // <<< Исправлен импорт
 import 'react-calendar/dist/Calendar.css';
 import './ManagerDashboard.css'; // Предполагается, что CSS файл будет создан
 
 const ManagerDashboard = () => {
   const [year, setYear] = useState(new Date().getFullYear() + 1);
-  const [departmentId, setDepartmentId] = useState(1); // ID подразделения руководителя (заглушка)
+  const [unitId, setUnitId] = useState(1); // <<< Переименована переменная состояния
   const [vacations, setVacations] = useState([]);
   const [intersections, setIntersections] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,11 +24,11 @@ const ManagerDashboard = () => {
         setLoading(true);
         
         // Получение отпусков сотрудников подразделения
-        const vacationsData = await getDepartmentVacations(departmentId, year); // Используем реальный API
+        const vacationsData = await getUnitVacations(unitId, year); // <<< Исправлен вызов и параметр
         setVacations(vacationsData);
         
         // Получение пересечений отпусков
-        const intersectionsData = await getVacationIntersections(departmentId, year); // Используем реальный API
+        const intersectionsData = await getVacationIntersections(unitId, year); // <<< Исправлен параметр
         setIntersections(intersectionsData);
       } catch (error) {
         toast.error('Ошибка при загрузке данных');
@@ -47,7 +47,7 @@ const ManagerDashboard = () => {
     // }
 
     fetchData();
-  }, [year, departmentId]);
+  }, [year, unitId]); // <<< Исправлена зависимость useEffect
 
   // Функция для отображения отпусков в календаре
   const getTileContent = ({ date, view }) => {

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import Calendar from 'react-calendar';
 import { toast } from 'react-toastify';
 import { FaCalendarAlt, FaUser, FaUsers } from 'react-icons/fa';
-import { getDepartmentVacations } from '../../api/vacations'; // Используем API для получения данных
+import { getUnitVacations } from '../../api/vacations'; // <<< Исправлен импорт
 import Loader from '../../components/ui/Loader/Loader';
 import { useUser } from '../../context/UserContext'; // Для получения ID подразделения
 // import 'react-calendar/dist/Calendar.css'; // Убираем стандартные стили
@@ -20,19 +20,18 @@ const VacationCalendar = () => {
   // Загрузка данных об отпусках
   useEffect(() => {
     const fetchCalendarData = async () => {
-      // Определяем ID подразделения (для руководителя - его подразделение, для обычного - тоже его)
-      // В реальном приложении логика может быть сложнее (например, админ видит все)
-      const departmentId = user?.departmentId || 1; // Заглушка ID=1, если у пользователя нет departmentId
+      // Определяем ID организационного юнита
+      const unitId = user?.organizational_unit_id || 1; // <<< Используем organizational_unit_id, переименована переменная
 
-      if (!departmentId) {
-          setError("Не удалось определить подразделение для загрузки календаря.");
+      if (!unitId) { // <<< Исправлена проверка
+          setError("Не удалось определить организационный юнит для загрузки календаря."); // <<< Обновлено сообщение
           return;
       }
 
       setLoading(true);
       setError(null);
       try {
-        const data = await getDepartmentVacations(departmentId, year); // Используем реальный API вызов
+        const data = await getUnitVacations(unitId, year); // <<< Исправлен вызов API
         setVacations(data);
       } catch (err) {
         setError(err.message || 'Не удалось загрузить данные календаря.');
@@ -97,7 +96,7 @@ const VacationCalendar = () => {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <h2><FaCalendarAlt /> Календарь отпусков {user?.departmentId ? `подразделения #${user.departmentId}` : ''}</h2>
+      <h2><FaCalendarAlt /> Календарь отпусков {user?.organizational_unit_id ? `юнита #${user.organizational_unit_id}` : ''}</h2> {/* <<< Исправлен текст и поле */}
 
        <div className="controls" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
          <label htmlFor="calendar-year">Год:</label>
