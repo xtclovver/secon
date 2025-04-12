@@ -192,7 +192,6 @@ function UserProfilePage() {
         {/* Отображаем данные из profileData */}
         <p><strong>ФИО:</strong> {profileData.full_name || 'Не указано'}</p>
         <p><strong>Логин:</strong> {profileData.login}</p>
-        <p><strong>Email:</strong> {profileData.email}</p>
         {/* Отображаем иерархию юнитов */}
         {profileData.department && <p><strong>Департамент:</strong> {profileData.department}</p>}
         {profileData.subDepartment && <p><strong>Подотдел:</strong> {profileData.subDepartment}</p>}

@@ -249,14 +249,15 @@ const DepartmentManagementPage = () => {
         </ol>
       </nav>
 
-      {/* --- Блок навигации по юнитам (виден всегда) --- */}
-      <div className="unit-navigation">
-        <h2>Дочерние подразделения:</h2>
-        {loadingUnits && <Loader />}
-        {unitsError && <p className="error-message">Ошибка: {unitsError}</p>}
-        {!loadingUnits && !unitsError && (
-          <ul className="items-list">
-            {childUnits.length > 0 ? (
+      {/* --- Блок навигации по юнитам (виден только если нет ошибки) --- */}
+      {!unitsError && ( // <-- Добавлено условие: не показывать блок при ошибке
+        <div className="unit-navigation">
+          <h2>Дочерние подразделения:</h2>
+          {loadingUnits && <Loader />}
+          {/* Ошибка unitsError теперь обрабатывается внешним условием, так что здесь ее не показываем */}
+          {!loadingUnits && ( // Убрали !unitsError отсюда, так как оно теперь снаружи
+            <ul className="items-list">
+              {childUnits.length > 0 ? (
               childUnits.map(item => (
                 <UnitListItem
                   key={`unit-${item.id}`}
@@ -266,10 +267,11 @@ const DepartmentManagementPage = () => {
               ))
             ) : (
               <p>Нет дочерних подразделений.</p>
-            )}
-          </ul>
-        )}
-      </div>
+              )}
+            </ul>
+          )}
+        </div>
+      )} {/* <-- Закрытие условия !unitsError */}
 
       {/* --- Блок управления пользователями (виден только если выбран юнит) --- */}
       {currentParentId !== null && (
@@ -312,11 +314,11 @@ const DepartmentManagementPage = () => {
         </div>
       )}
 
-      {/* TODO: Добавить кнопку "Создать юнит/пользователя" */}
-
-      {/* Старый блок отображения смешанного списка удален */}
+      {/* TODO: Добавить кнопки "Создать юнит", "Добавить пользователя" */}
+      {/* Можно разместить их в controls-section или отдельном блоке */}
+      {/* </div> */} {/* Закрытие main-content-wrapper, если используется */}
     </div>
   );
 };
 
-export default DepartmentManagementPage; // <-- Добавляем экспорт в самый конец
+export default DepartmentManagementPage;
