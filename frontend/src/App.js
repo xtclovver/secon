@@ -24,6 +24,7 @@ import { isAuthenticated, getCurrentUser, logout } from './api/auth';
 
 // Страницы (используем lazy loading)
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/auth/RegisterPage')); // Добавляем страницу регистрации
 const UserDashboard = lazy(() => import('./pages/dashboard/UserDashboard')); // Будет создан позже
 const ManagerDashboard = lazy(() => import('./pages/dashboard/ManagerDashboard'));
 const AdminDashboard = lazy(() => import('./pages/dashboard/AdminDashboard')); // Будет создан позже
@@ -124,10 +125,14 @@ const App = () => {
                     <Routes>
                       {/* Общедоступные маршруты */}
                       <Route 
-                        path="/login" 
-                        element={isAuthenticated() && user ? <Navigate to="/dashboard" replace /> : <LoginPage />} 
+                        path="/login"
+                        element={isAuthenticated() && user ? <Navigate to="/dashboard" replace /> : <LoginPage />}
                       />
-                      
+                      <Route
+                        path="/register"
+                        element={isAuthenticated() && user ? <Navigate to="/dashboard" replace /> : <RegisterPage />} // Добавляем маршрут регистрации
+                      />
+
                       {/* Защищенные маршруты */}
                       <Route element={<ProtectedRoute />}>
                         {/* Перенаправление на соответствующий дашборд */}

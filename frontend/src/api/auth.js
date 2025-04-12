@@ -172,5 +172,68 @@ export const isAuthenticated = () => {
   // В более сложном случае можно проверять срок действия токена
 };
 
+/**
+ * Регистрация нового пользователя
+ * @param {Object} userData - Данные пользователя (username, password, confirm_password, full_name, email, position_id)
+ * @returns {Promise<Object>} - Объект с данными созданного пользователя
+ */
+export const register = async (userData) => {
+  try {
+    // Преобразуем ключи перед отправкой на бэкенд (если нужно)
+    // const backendUserData = { ...userData };
+    // if (backendUserData.hasOwnProperty('positionId')) {
+    //   backendUserData.position_id = backendUserData.positionId;
+    //   delete backendUserData.positionId;
+    // }
+    // ... другие преобразования ...
+
+    const response = await authApi.post('/auth/register', userData); // Отправляем userData как есть
+    const backendUser = response.data;
+
+    // Преобразуем пользователя перед возвратом
+    const frontendUser = transformUserKeys(backendUser);
+
+    // Не сохраняем пользователя в localStorage при регистрации,
+    // пользователь должен будет войти после регистрации.
+    return frontendUser;
+  } catch (error) {
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    } else if (error.request) {
+      throw new Error('Не удалось подключиться к серверу. Проверьте ваше соединение.');
+    } else {
+      throw new Error('Произошла неизвестная ошибка при регистрации.');
+    }
+  }
+};
+
+/**
+ * Получение списка должностей
+ * @returns {Promise<Array>} - Массив групп должностей с вложенными должностями
+ */
+export const getPositions = async () => {
+  try {
+    const response = await authApi.get('/positions');
+    // Данные с бэкенда уже должны быть в нужном формате (массив PositionGroup)
+    // Если ключи в Position или PositionGroup в snake_case, их нужно будет преобразовать здесь.
+    // Пример:
+    // return response.data.map(group => ({
+    //   ...group,
+    //   sortOrder: group.sort_order, // Преобразование sort_order
+    //   positions: group.positions.map(pos => ({ ...pos })) // Преобразование ключей в Position, если нужно
+    // }));
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    } else if (error.request) {
+      throw new Error('Не удалось подключиться к серверу. Проверьте ваше соединение.');
+    } else {
+      throw new Error('Произошла неизвестная ошибка при получении списка должностей.');
+    }
+  }
+};
+
+
 // Экспорт экземпляра axios для возможного использования в других API-клиентах
 export default authApi;

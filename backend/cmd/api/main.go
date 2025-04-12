@@ -61,6 +61,8 @@ func main() {
 
 	// Публичные маршруты
 	router.POST("/api/auth/login", authHandler.Login)
+	router.POST("/api/auth/register", authHandler.Register) // Новый маршрут для регистрации
+	router.GET("/api/positions", appHandler.GetPositions)   // Новый маршрут для получения должностей (публичный?)
 
 	// Защищенные маршруты
 	api := router.Group("/api")

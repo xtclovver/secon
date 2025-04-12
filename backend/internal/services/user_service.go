@@ -9,6 +9,7 @@ import (
 // UserServiceInterface определяет методы для сервиса пользователей
 type UserServiceInterface interface {
 	GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error)
+	GetAllPositionsGrouped() ([]models.PositionGroup, error) // Добавлен метод для получения должностей
 	// TODO: Добавить другие методы сервиса пользователей по мере необходимости
 }
 
@@ -35,6 +36,17 @@ func (s *UserService) GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO
 	// На данный момент дополнительной бизнес-логики нет, просто возвращаем результат репозитория.
 	// В будущем здесь можно добавить проверки, фильтрацию и т.д.
 	return users, nil
+}
+
+// GetAllPositionsGrouped получает список всех должностей, сгруппированных по категориям
+func (s *UserService) GetAllPositionsGrouped() ([]models.PositionGroup, error) {
+	positions, err := s.userRepo.GetAllPositionsGrouped()
+	if err != nil {
+		// Можно добавить логирование ошибки здесь
+		return nil, fmt.Errorf("ошибка получения должностей из репозитория: %w", err)
+	}
+	// На данный момент дополнительной бизнес-логики нет
+	return positions, nil
 }
 
 // TODO: Реализовать другие методы бизнес-логики для пользователей
