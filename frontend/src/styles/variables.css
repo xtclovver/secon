@@ -7,7 +7,9 @@
   --text-primary: #212529;      /* Основной цвет текста */
   --text-secondary: #6c757d;    /* Вторичный цвет текста (серый) */
   --text-tertiary: #adb5bd;     /* Третичный цвет текста (светло-серый) */
+  --text-color: var(--text-primary); /* Явно определяем основной цвет текста для использования в компонентах */
   --border-color: #dee2e6;      /* Цвет рамок */
+  --input-background-color: var(--bg-tertiary); /* Фон для инпутов */
   --accent-color: #0d6efd;      /* Основной акцентный цвет (синий) */
   --accent-hover: #0b5ed7;      /* Акцентный цвет при наведении */
   --success-color: #198754;     /* Цвет успеха (зеленый) */
@@ -52,7 +54,9 @@
   --text-primary: #e9ecef; /* Не чисто белый, а светло-серый */
   --text-secondary: #adb5bd;
   --text-tertiary: #6c757d;
+  --text-color: var(--text-primary); /* Явно определяем основной цвет текста для использования в компонентах */
   --border-color: #444444; /* Темнее рамки */
+  --input-background-color: var(--bg-tertiary); /* Фон для инпутов в темной теме */
   --accent-color: #3d8bfd; /* Светлее синий для темного фона */
   --accent-hover: #5a9cfd;
   --success-color: #28a745; /* Зеленый может остаться тем же */
