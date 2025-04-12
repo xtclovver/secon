@@ -1,0 +1,171 @@
+.profile-page {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background-color: var(--background-color-secondary);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  color: var(--text-color-primary);
+}
+
+.profile-page h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: var(--text-color-primary);
+}
+
+.profile-info {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background-color: var(--background-color-tertiary);
+  border-radius: 4px;
+}
+
+.profile-info p {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.profile-info strong {
+  color: var(--text-color-secondary);
+  margin-right: 0.5em;
+}
+
+.profile-form h3 {
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  color: var(--text-color-secondary);
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="password"],
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--input-background-color);
+  color: var(--input-text-color);
+  box-sizing: border-box; /* Убедимся, что padding не увеличивает размер */
+  transition: border-color 0.2s ease-in-out;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.profile-form button {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s ease-in-out;
+  width: 100%; /* Растягиваем кнопку */
+  margin-top: 1rem; /* Добавляем отступ сверху */
+}
+
+.profile-form button:hover:not(:disabled) {
+  background-color: var(--primary-color-dark);
+}
+
+.profile-form button:disabled {
+  background-color: var(--button-disabled-background-color);
+  cursor: not-allowed;
+}
+
+.error-message {
+  color: var(--error-color);
+  background-color: var(--error-background-color);
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+/* Стили для кнопки сохранения */
+.save-button {
+  display: inline-block;
+  padding: 14px 25px; /* Увеличенные отступы */
+  /* Используем ПРАВИЛЬНУЮ переменную основного акцентного цвета темы */
+  background-color: var(--accent-color);
+  /* Устанавливаем белый цвет текста, хорошо контрастирует с синим */
+  color: white; /* Белый текст обычно хорошо подходит для акцентного цвета */
+  /* Убираем рамку или делаем ее в цвет фона */
+  border: none;
+  /* border: 1px solid var(--primary-color-dark); */ /* Альтернатива: темная рамка */
+  border-radius: 5px; /* Скругленные углы */
+  cursor: pointer;
+  font-size: 1.1rem; /* Немного крупнее шрифт */
+  font-weight: bold; /* Жирный текст */
+  text-transform: uppercase; /* Заглавные буквы */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2); /* Легкая тень для текста */
+  letter-spacing: 0.5px; /* Интервал между буквами */
+  transition: background-color 0.3s ease, transform 0.1s ease, box-shadow 0.3s ease; /* Плавные переходы */
+  width: 100%; /* Растягиваем кнопку */
+  margin-top: 1rem; /* Отступ сверху */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Небольшая тень */
+}
+
+.save-button:hover:not(:disabled) {
+  /* Используем ПРАВИЛЬНУЮ переменную для наведения */
+  background-color: var(--accent-hover);
+  /* border-color: var(--accent-hover); */ /* Можно добавить рамку, если нужно */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Более заметная тень при наведении */
+  transform: translateY(-1px); /* Легкий подъем */
+}
+
+.save-button:active:not(:disabled) {
+    transform: translateY(0); /* Возвращаем на место при клике */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Возвращаем тень */
+    /* Используем цвет наведения для состояния active */
+    background-color: var(--accent-hover);
+}
+
+
+.save-button:focus {
+  outline: none; /* Убираем стандартный outline */
+  /* Используем основной акцентный цвет для "свечения" при фокусе с прозрачностью */
+  /* Так как нет --accent-color-focus, создаем эффект с rgba */
+  box-shadow: 0 0 0 3px rgba(from var(--accent-color) r g b / 0.5); /* Используем цвет из переменной с alpha */
+}
+
+.save-button:disabled {
+  background-color: var(--button-disabled-background-color);
+  cursor: not-allowed;
+  box-shadow: none; /* Убираем тень для неактивной кнопки */
+  transform: none; /* Убираем трансформацию */
+}
+
+/* Стили для Loader внутри кнопки */
+.save-button .loader-container {
+    display: inline-block;
+    vertical-align: middle;
+    /* Можно добавить margin, если нужно */
+}
+
+.success-message {
+  color: var(--success-color);
+  background-color: var(--success-background-color);
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  text-align: center;
+}

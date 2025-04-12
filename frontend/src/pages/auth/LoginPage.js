@@ -1,150 +1,96 @@
-import React, { useState, useContext } from 'react'; // Добавлен useContext
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { FaUser, FaLock } from 'react-icons/fa';
-import { login } from '../../api/auth'; // Предполагается, что API файл будет создан
-import { useUser } from '../../context/UserContext'; // Импортируем хук useUser
-import './LoginPage.css';
+import React, { useState, useContext } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { login } from '../../api/auth'; // Исправляем импорт на 'login'
+import { UserContext } from '../../context/UserContext'; // Для обновления состояния пользователя
+import './LoginPage.css'; // Импортируем новые стили
 
-const LoginPage = () => {
-  const { setUser } = useUser(); // Получаем setUser из контекста
-  const [username, setUsername] = useState('');
+function LoginPage() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { setUser } = useContext(UserContext); // Получаем функцию для установки пользователя
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    // console.log('Login form submitted. handleSubmit triggered.'); // <-- Убираем лог
+    event.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
-      // Вызываем реальную функцию API для входа
-      const data = await login(username, password); 
+      const responseData = await login({ email, password }); // Переименуем для ясности
+      // console.log('Login successful:', responseData); // Лог успешного входа
       
-      // API должен вернуть токен и данные пользователя при успехе
-      if (data && data.token && data.user) {
-        // Сохраняем токен и пользователя (API уже должен был сохранить в localStorage)
-        // localStorage.setItem('token', data.token); // Это делается внутри api/auth.js
-        // localStorage.setItem('user', JSON.stringify(data.user)); // Это делается внутри api/auth.js
-        
-        // Обновляем состояние пользователя в контексте
-        setUser(data.user); 
-        
-        // Определяем путь для редиректа на основе роли пользователя
-        let redirectPath = '/dashboard'; // Путь по умолчанию
-        if (data.user.isAdmin) {
-          redirectPath = '/admin/dashboard';
-        } else if (data.user.isManager) {
-          redirectPath = '/manager/dashboard';
-        }
-        
-        navigate(redirectPath, { replace: true }); // Перенаправляем пользователя
+      // Передаем только объект пользователя в setUser
+      // Используем optional chaining на случай, если user не пришел
+      if (responseData?.user) {
+        setUser(responseData.user); 
       } else {
-         // Если API не вернуло ожидаемые данные
-         throw new Error('Не удалось получить данные пользователя после входа.');
+         // Обработка случая, когда пользователь не вернулся в ответе, но ошибки не было
+         console.error("Данные пользователя не получены после входа.");
+         setError('Не удалось получить данные пользователя.');
+         setLoading(false); // Останавливаем загрузку
+         return; // Прерываем выполнение handleSubmit
+      }
+
+      // Проверяем роль внутри объекта user, используем optional chaining
+      if (responseData?.user?.role === 'admin') {
+        navigate('/admin-dashboard');
+      } else if (responseData?.user?.role === 'manager') {
+        navigate('/manager-dashboard');
+      } else {
+        navigate('/profile'); // Или '/dashboard' для обычных пользователей (включая случай, если role не определена)
       }
     } catch (err) {
-      setError(err.message || 'Ошибка при входе. Пожалуйста, проверьте учетные данные.');
+      // console.error('Login error:', err); // Лог ошибки
+      setError(err.message || 'Ошибка входа. Проверьте введенные данные.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <motion.div 
-      className="login-page"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <motion.div 
-        className="login-container"
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ 
-          type: 'spring', 
-          stiffness: 300, 
-          damping: 20,
-          delay: 0.2
-        }}
-      >
-        <motion.div 
-          className="login-header"
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3 }}
-        >
-          <h1>Система учета отпусков</h1>
-          <p>Введите учетные данные для входа</p>
-        </motion.div>
-        
-        {error && (
-          <motion.div 
-            className="error-message"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {error}
-          </motion.div>
-        )}
-        
-        <form onSubmit={handleSubmit}>
-          <motion.div 
-            className="input-group"
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.4 }}
-          >
-            <FaUser className="input-icon" />
-            <input
-              type="text"
-              id="username"
-              placeholder="Имя пользователя (admin/manager/user)"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          </motion.div>
-          
-          <motion.div 
-            className="input-group"
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.5 }}
-          >
-            <FaLock className="input-icon" />
-            <input
-              type="password"
-              id="password"
-              placeholder="Пароль (admin/manager/user)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </motion.div>
-          
-          <motion.button
-            type="submit"
-            className="login-button"
-            disabled={loading}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.6 }}
-          >
-            {loading ? 'Выполняется вход...' : 'Войти'}
-          </motion.button>
-        </form>
-        {/* Добавляем ссылку на регистрацию */}
-        <p className="register-link">
-          Нет аккаунта? <a href="/register">Зарегистрироваться</a>
-        </p>
-      </motion.div>
-    </motion.div>
+    <div className="auth-page login-page"> {/* Добавляем класс login-page для специфичных стилей */}
+      <div className="auth-container login-container-size"> {/* Новый класс для управления размером */}
+        <div className="form-container"> {/* Убираем login-container класс отсюда */}
+          <h2>Вход</h2>
+          <form> {/* Снова убираем onSubmit отсюда */}
+            {error && <p className="error-message">{error}</p>}
+            <div className="form-group">
+              <label htmlFor="login-email">Email</label>
+              <input
+                type="email"
+                id="login-email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="login-password">Пароль</label>
+              <input
+                type="password"
+                id="login-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+            {/* Снова добавляем onClick сюда */}
+            <button type="submit" onClick={handleSubmit} disabled={loading}> 
+              {loading ? 'Вход...' : 'Войти'}
+            </button>
+          </form>
+          <Link to="/register" className="toggle-link"> {/* Используем Link вместо button */}
+            Нет аккаунта? Зарегистрируйтесь
+          </Link>
+        </div>
+      </div>
+    </div>
   );
-};
+}
 
 export default LoginPage;

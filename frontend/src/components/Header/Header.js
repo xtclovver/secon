@@ -104,14 +104,16 @@ const Header = () => {
               exit="exit"
             >
               <nav className="mobile-nav">
-                <NavLink to="/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Дашборд</NavLink>
+                {/* Возвращаем /dashboard, так как маршрут теперь существует */}
+                <NavLink to="/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Дашборд</NavLink> 
                 <NavLink to="/vacations/new" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Оформить отпуск</NavLink>
                 <NavLink to="/vacations/list" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Мои заявки</NavLink>
                 <NavLink to="/vacations/calendar" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Календарь</NavLink>
                 {user?.isManager && (
                   <NavLink to="/manager/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Дашборд руководителя</NavLink>
                 )}
-                {user?.isAdmin && (
+                {/* Возвращаем isAdmin */}
+                {user?.isAdmin && ( 
                   <NavLink to="/admin/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Админ-панель</NavLink>
                 )}
                  <button onClick={() => { handleLogout(); closeMobileMenu(); }} className="mobile-logout-button">
@@ -166,9 +168,10 @@ const Header = () => {
               aria-label="Профиль пользователя"
             >
               <FaUser />
+              {/* Используем fullName (после исправления transformUserKeys) */}
               <span className="user-name">{user?.fullName || 'Пользователь'}</span>
             </button>
-            
+
             <AnimatePresence>
               {isProfileOpen && (
                 <motion.div 
@@ -181,17 +184,27 @@ const Header = () => {
                 >
                   <div className="menu-header">
                     <div className="user-info">
+                      {/* Используем fullName */}
                       <strong>{user?.fullName}</strong>
                       <span className="user-email">{user?.email}</span>
                       {/* --- DEBUGGING ROLES --- */}
-                      {console.log(`Header Role Check: isAdmin=${user?.isAdmin}, isManager=${user?.isManager}`)}
+                      {/* Используем isAdmin и isManager */}
+                      {console.log(`Header Role Check: isAdmin=${user?.isAdmin}, isManager=${user?.isManager}`)} 
                       {/* Отображение ролей */}
-                      {user?.isManager && <span className="user-role manager">Руководитель</span>}
-                      {user?.isAdmin && <span className="user-role admin">Администратор</span>}
-                      {!user?.isManager && !user?.isAdmin && <span className="user-role">Сотрудник</span>}
+                      {user?.isManager && <span className="user-role manager">Руководитель</span>} 
+                      {user?.isAdmin && <span className="user-role admin">Администратор</span>} 
+                      {/* Проверяем оба флага перед отображением "Сотрудник" */}
+                      {!user?.isManager && !user?.isAdmin && <span className="user-role">Сотрудник</span>} 
                     </div>
                   </div>
                   <ul className="menu-list">
+                    <li>
+                      {/* Добавляем ссылку на профиль */}
+                      <Link to="/profile" className="menu-link" onClick={() => setIsProfileOpen(false)}>
+                        <FaUser /> {/* Можно использовать другую иконку, если есть */}
+                        <span>Профиль</span>
+                      </Link>
+                    </li>
                     <li>
                       <button onClick={handleLogout} className="logout-button">
                         <FaSignOutAlt />

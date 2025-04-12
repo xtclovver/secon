@@ -16,7 +16,8 @@ type UserRepositoryInterface interface {
 	FindByID(id int) (*models.User, error)
 	GetUsersByDepartment(departmentID int) ([]models.User, error)
 	CreateUser(user *models.User) error
-	UpdateUser(user *models.User) error
+	// UpdateUser теперь принимает ID и DTO для частичного обновления
+	UpdateUser(userID int, updateData *models.UserUpdateDTO) error
 	GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error)
 	GetAllPositionsGrouped() ([]models.PositionGroup, error) // Новый метод
 	// Добавьте другие методы по мере необходимости
@@ -190,20 +191,55 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 	return nil
 }
 
-// UpdateUser обновляет данные пользователя (кроме пароля)
-func (r *UserRepository) UpdateUser(user *models.User) error {
-	// При обновлении также обновляем position_id
-	query := `
-		UPDATE users
-		SET full_name = ?, email = ?, department_id = ?, position_id = ?, is_admin = ?, is_manager = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?`
+// UpdateUser обновляет данные пользователя на основе предоставленных полей в DTO
+func (r *UserRepository) UpdateUser(userID int, updateData *models.UserUpdateDTO) error {
+	if updateData == nil {
+		return errors.New("данные для обновления не предоставлены")
+	}
 
-	result, err := r.db.Exec(query,
-		user.FullName, user.Email, user.DepartmentID, user.PositionID,
-		user.IsAdmin, user.IsManager, user.ID,
-	)
+	query := "UPDATE users SET "
+	args := []interface{}{}
+	argID := 1 // Счетчик для плейсхолдеров
+
+	// Динамически строим запрос
+	if updateData.FullName != nil {
+		query += "full_name = ?, " // Используем стандартный плейсхолдер '?'
+		args = append(args, *updateData.FullName)
+		argID++
+	}
+	if updateData.Password != nil && *updateData.Password != "" { // Обновляем пароль, только если он не пустой
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*updateData.Password), 12)
+		if err != nil {
+			return fmt.Errorf("ошибка хеширования нового пароля: %w", err)
+		}
+		query += "password = ?, " // Используем стандартный плейсхолдер '?'
+		args = append(args, string(hashedPassword))
+		argID++
+	}
+	if updateData.PositionID != nil {
+		query += "position_id = ?, " // Используем стандартный плейсхолдер '?'
+		args = append(args, *updateData.PositionID)
+		argID++
+	}
+
+	// Если нечего обновлять (кроме updated_at)
+	if argID == 1 {
+		return errors.New("нет полей для обновления")
+	}
+
+	// Добавляем обновление времени и условие WHERE
+	query += "updated_at = CURRENT_TIMESTAMP " // Пробел перед WHERE важен
+	query += "WHERE id = ?"                    // Используем стандартный плейсхолдер '?'
+	args = append(args, userID)                // Добавляем ID пользователя в конец списка аргументов
+
+	// Заменяем плейсхолдеры MySQL (?) на плейсхолдеры PostgreSQL ($) если нужно
+	// query = strings.ReplaceAll(query, "?", "$") // Раскомментировать для PostgreSQL
+
+	// Выполняем запрос
+	result, err := r.db.Exec(query, args...)
 	if err != nil {
-		return fmt.Errorf("ошибка обновления пользователя: %w", err)
+		// TODO: Добавить более специфичную обработку ошибок БД, например, для неверного position_id
+		return fmt.Errorf("ошибка выполнения запроса на обновление пользователя: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -211,7 +247,8 @@ func (r *UserRepository) UpdateUser(user *models.User) error {
 		return fmt.Errorf("ошибка получения количества обновленных строк: %w", err)
 	}
 	if rowsAffected == 0 {
-		return errors.New("пользователь для обновления не найден")
+		// Это может означать, что пользователь с таким ID не найден
+		return errors.New("пользователь для обновления не найден или данные не изменились")
 	}
 
 	return nil

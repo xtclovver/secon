@@ -1,131 +1,221 @@
-.register-page {
-  max-width: 450px; /* Немного шире для доп. полей */
-  margin: 40px auto;
-  padding: 30px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background-color: var(--background-secondary);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  text-align: center;
-}
-
-.register-page h2 {
-  margin-bottom: 25px;
-  color: var(--text-primary);
-  font-size: 1.8em;
-}
-
-.register-form .form-group {
-  margin-bottom: 20px;
-  text-align: left;
-}
-
-.register-form label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: bold;
-  color: var(--text-secondary);
-  font-size: 0.95em;
-}
-
-.register-form input[type="text"],
-.register-form input[type="email"],
-.register-form input[type="password"],
-.register-form select {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  box-sizing: border-box; /* Учитывает padding и border в ширине */
-  background-color: var(--input-background);
-  color: var(--text-primary);
-  font-size: 1em;
-}
-
-.register-form input:focus,
-.register-form select:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px var(--primary-color-light);
-}
-
-.register-form select {
-  appearance: none; /* Убираем стандартный вид селекта */
-  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007bff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 10px 10px;
-  padding-right: 30px; /* Место для стрелки */
-}
-
-.register-form select optgroup {
-  font-weight: bold;
-  font-style: italic;
-  color: var(--text-secondary);
-}
-
-.register-form button[type="submit"] {
-  width: 100%;
-  padding: 12px;
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.1em;
-  font-weight: bold;
-  transition: background-color 0.3s ease;
-}
-
-.register-form button[type="submit"]:hover {
-  background-color: var(--primary-color-dark);
-}
-
-.register-form button[type="submit"]:disabled {
-  background-color: var(--disabled-color);
-  cursor: not-allowed;
-}
-
-.error-message {
-  color: var(--error-color);
-  background-color: var(--error-background);
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  border: 1px solid var(--error-border-color);
-  font-size: 0.9em;
-}
-
-.success-message {
-  color: var(--success-color);
-  background-color: var(--success-background);
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  border: 1px solid var(--success-border-color);
-  font-size: 0.9em;
-}
-
-.login-link {
-  margin-top: 20px;
-  font-size: 0.9em;
-  color: var(--text-secondary);
-}
-
-.login-link a {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: bold;
-}
-
-.login-link a:hover {
-  text-decoration: underline;
-}
-
-/* Стили для загрузчика внутри формы */
-.register-form .loader-container {
+/* --- Base Styles (Shared with LoginPage) --- */
+.auth-page {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 15px;
+  min-height: 90vh;
+  background: linear-gradient(135deg, var(--background-gradient-start, #f5f7fa), var(--background-gradient-end, #c3cfe2));
+  padding: 20px;
+  overflow-y: auto; /* Allow scrolling if content overflows */
+}
+
+.auth-container {
+  position: relative;
+  max-width: 420px;
+  width: 90%;
+  /* min-height will be set by specific page styles */
+  background-color: var(--card-background-color, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  overflow: hidden; /* Keep overflow hidden for rounded corners */
+}
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Center content vertically */
+  align-items: center;
+  padding: 40px 50px; /* Original padding for register */
+  color: var(--text-color);
+  box-sizing: border-box;
+  height: 100%; /* Fill the container */
+}
+
+/* --- Register Specific Styles --- */
+.register-container-size {
+  min-height: 520px; /* Original height for register */
+}
+
+/* --- Form Element Styling (Shared) --- */
+.form-container h2 {
+  margin-bottom: 30px; /* Original spacing */
+  color: var(--primary-color, #007bff);
+  font-size: 2em;
+  font-weight: 600;
+}
+
+.form-container form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 18px; /* Original spacing */
+}
+
+.form-container .form-group {
+    width: 100%;
+    position: relative;
+}
+
+.form-container label {
+    display: block;
+    margin-bottom: 6px; /* Original spacing */
+    font-weight: 500;
+    font-size: 0.95em;
+    color: var(--text-secondary-color, #555);
+}
+
+/* Common input styles */
+.form-container input[type="text"],
+.form-container input[type="email"],
+.form-container input[type="password"],
+.form-container select {
+    width: 100%;
+    padding: 14px 18px; /* Original padding */
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    background-color: var(--input-background-color, #f9f9f9);
+    color: var(--text-color);
+    box-sizing: border-box;
+    font-size: 1em;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Select specific styling */
+.form-container select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236c757d' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 18px center; /* Original position */
+    padding-right: 45px; /* Original padding */
+}
+
+/* Focus styles */
+.form-container input[type="text"]:focus,
+.form-container input[type="email"]:focus,
+.form-container input[type="password"]:focus,
+.form-container select:focus {
+    outline: none;
+    border-color: var(--primary-color, #007bff);
+    box-shadow: 0 0 0 3px var(--primary-color-light-focus, rgba(0, 123, 255, 0.2));
+}
+
+.form-container .error-message,
+.form-container .success-message {
+    font-size: 0.9em; /* Original size */
+    margin-top: -5px;
+    margin-bottom: 10px;
+    min-height: 1.2em; /* Original height */
+    text-align: center;
+    width: 100%;
+    padding: 10px; /* Original padding */
+    border-radius: 6px; /* Original radius */
+    box-sizing: border-box;
+}
+
+.form-container .error-message {
+    color: var(--error-color-dark, #D8000C);
+    background-color: var(--error-background-light, #FFD2D2);
+}
+
+.form-container .success-message {
+    color: var(--success-color-dark, #4F8A10);
+    background-color: var(--success-background-light, #DFF2BF);
+}
+
+/* Submit button */
+.form-container button[type="submit"] {
+    padding: 14px 25px; /* Original padding */
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--primary-color, #007bff), var(--primary-dark-color, #0056b3));
+    color: white;
+    font-size: 1.05em; /* Original size */
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 15px; /* Original margin */
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3); /* Original shadow */
+}
+
+.form-container button[type="submit"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 123, 255, 0.4); /* Original shadow */
+}
+
+.form-container button[type="submit"]:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3); /* Original shadow */
+}
+
+.form-container button[type="submit"]:disabled {
+    background: var(--disabled-color, #ccc);
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Toggle link styling (replaces .toggle-button) */
+.toggle-link {
+  margin-top: 25px; /* Original spacing */
+  padding: 10px 15px; /* Original padding */
+  background-color: transparent;
+  color: var(--primary-color, #007bff);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  font-weight: 500;
+  font-size: 0.95em; /* Original size */
+  text-decoration: none; /* Remove default link underline */
+  display: inline-block; /* Allow padding */
+  text-align: center;
+}
+
+.toggle-link:hover {
+  background-color: var(--primary-color-light-hover, rgba(0, 123, 255, 0.1));
+  color: var(--primary-dark-color, #0056b3);
+  text-decoration: none; /* Ensure no underline on hover */
+}
+
+/* --- Responsive Adjustments (Shared) --- */
+@media (max-width: 480px) {
+   .auth-container {
+     /* min-height will adjust based on content */
+     box-shadow: none;
+     width: 100%;
+     border-radius: 0; /* Full width on small screens */
+  }
+  .auth-page {
+      padding: 0; /* Remove padding for full width */
+      min-height: 100vh; /* Ensure full viewport height */
+  }
+
+  .form-container {
+    padding: 30px 25px; /* Reduce padding */
+  }
+
+  .form-container h2 {
+    font-size: 1.8em;
+    margin-bottom: 20px;
+  }
+
+  .form-container form {
+    gap: 15px; /* Reduce gap */
+  }
+
+  .form-container input[type="text"],
+  .form-container input[type="email"],
+  .form-container input[type="password"],
+  .form-container select {
+    padding: 12px 15px; /* Reduce padding */
+  }
+
+  .form-container button[type="submit"] {
+    padding: 12px 20px; /* Reduce padding */
+    font-size: 1em;
+  }
+
+  .toggle-link {
+    margin-top: 20px; /* Adjust spacing */
+    font-size: 0.9em;
+  }
 }

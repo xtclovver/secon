@@ -22,15 +22,19 @@ import Loader from './components/ui/Loader/Loader';
 // Сервисы (перемещены выше)
 import { isAuthenticated, getCurrentUser, logout } from './api/auth';
 
-// Страницы (используем lazy loading)
+// Auth pages (lazy loading)
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
-const RegisterPage = lazy(() => import('./pages/auth/RegisterPage')); // Добавляем страницу регистрации
-const UserDashboard = lazy(() => import('./pages/dashboard/UserDashboard')); // Будет создан позже
+const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
+
+// Other pages (lazy loading)
+// const UserDashboard = lazy(() => import('./pages/dashboard/UserDashboard')); // Больше не используется напрямую
+const UniversalDashboard = lazy(() => import('./pages/dashboard/UniversalDashboard')); // Добавляем универсальный дашборд
 const ManagerDashboard = lazy(() => import('./pages/dashboard/ManagerDashboard'));
-const AdminDashboard = lazy(() => import('./pages/dashboard/AdminDashboard')); // Будет создан позже
+const AdminDashboard = lazy(() => import('./pages/dashboard/AdminDashboard'));
 const VacationForm = lazy(() => import('./pages/vacations/VacationForm'));
 const VacationsList = lazy(() => import('./pages/vacations/VacationsList')); // Будет создан позже
 const VacationCalendar = lazy(() => import('./pages/vacations/VacationCalendar')); // Будет создан позже
+const UserProfilePage = lazy(() => import('./pages/profile/UserProfilePage')); // Добавляем страницу профиля
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage')); // Будет создан позже
 
 
@@ -124,56 +128,52 @@ const App = () => {
                   <AnimatePresence mode="wait">
                     <Routes>
                       {/* Общедоступные маршруты */}
-                      <Route 
+                      {/* Auth Routes */}
+                      <Route
                         path="/login"
-                        element={isAuthenticated() && user ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+                        // Если пользователь аутентифицирован, перенаправляем на профиль (или дашборд)
+                        element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <LoginPage />}
                       />
                       <Route
                         path="/register"
-                        element={isAuthenticated() && user ? <Navigate to="/dashboard" replace /> : <RegisterPage />} // Добавляем маршрут регистрации
+                         // Если пользователь аутентифицирован, перенаправляем на профиль (или дашборд)
+                        element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <RegisterPage />}
                       />
 
-                      {/* Защищенные маршруты */}
+                       {/* Protected Routes */}
                       <Route element={<ProtectedRoute />}>
-                        {/* Перенаправление на соответствующий дашборд */}
+                        {/* Перенаправление с главной на дашборд */}
                         <Route 
                           path="/" 
                           element={
-                            <Navigate 
-                              to={
-                                !user // Если user еще null (маловероятно из-за ProtectedRoute, но для надежности)
-                                  ? "/login" 
-                                  : user.isAdmin 
-                                    ? "/admin/dashboard" 
-                                    : user.isManager 
-                                      ? "/manager/dashboard" 
-                                      : "/dashboard"
-                              } 
-                              replace 
+                            <Navigate
+                              to={user ? "/dashboard" : "/login"} // Всегда на /dashboard если залогинен
+                              replace
                             />
                           } 
                         />
-                        
+
                         {/* Маршруты для всех аутентифицированных пользователей */}
-                        <Route path="/dashboard" element={<UserDashboard />} />
+                        <Route path="/dashboard" element={<UniversalDashboard />} /> {/* Добавляем маршрут для универсального дашборда */}
                         <Route path="/vacations/new" element={<VacationForm />} />
                         <Route path="/vacations/list" element={<VacationsList />} />
                         <Route path="/vacations/calendar" element={<VacationCalendar />} />
+                        <Route path="/profile" element={<UserProfilePage />} /> {/* Добавляем маршрут для профиля */}
                         
                         {/* Маршруты для руководителей (дополнительная проверка роли) */}
-                        <Route 
-                          path="/manager/dashboard" 
-                          element={
-                            user?.isManager ? <ManagerDashboard /> : <Navigate to="/dashboard" replace />
-                          } 
+                        <Route
+                          path="/manager/dashboard"
+                          element={ // Проверяем роль менеджера
+                            user?.role === 'manager' ? <ManagerDashboard /> : <Navigate to="/profile" replace />
+                          }
                         />
-                        
+
                         {/* Маршруты для администраторов (дополнительная проверка роли) */}
-                        <Route 
-                          path="/admin/dashboard" 
-                          element={
-                            user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" replace />
-                          } 
+                        <Route
+                          path="/admin/dashboard"
+                          element={ // Проверяем роль админа
+                            user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/profile" replace />
+                          }
                         />
                       </Route>
                       

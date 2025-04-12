@@ -1,183 +1,152 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { register, getPositions } from '../../api/auth'; // Импортируем API функции
-import './RegisterPage.css'; // Стили для страницы регистрации
-import Loader from '../../components/ui/Loader/Loader'; // Компонент загрузчика
+import React, { useState, useEffect } from 'react'; // Добавляем useEffect
+import { useNavigate, Link } from 'react-router-dom';
+import { register, getPositions } from '../../api/auth'; // Импортируем getPositions
+import './RegisterPage.css'; // Импортируем новые стили
 
 function RegisterPage() {
-  const [formData, setFormData] = useState({
-    fullName: '',
-    username: '',
-    email: '', // Добавим поле email, так как оно есть в модели и API
-    password: '',
-    confirmPassword: '',
-    positionId: '', // ID выбранной должности
-  });
-  const [positions, setPositions] = useState([]); // Список должностей для dropdown
-  const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  // Убираем state для role, добавляем для positionId и positionsData
+  const [positionId, setPositionId] = useState('');
+  const [positionsData, setPositionsData] = useState([]); // Для хранения списка должностей
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [positionsLoading, setPositionsLoading] = useState(true); // Состояние загрузки должностей
   const navigate = useNavigate();
 
-  // Загрузка должностей при монтировании компонента
+  // Загружаем должности при монтировании компонента
   useEffect(() => {
     const fetchPositions = async () => {
-      setLoading(true);
       try {
+        setPositionsLoading(true);
         const data = await getPositions();
-        setPositions(data || []); // Устанавливаем пустой массив, если данные не пришли
+        setPositionsData(data || []); // Устанавливаем данные или пустой массив
+         // Устанавливаем ID первой должности по умолчанию, если список не пуст
+        if (data && data.length > 0 && data[0].positions && data[0].positions.length > 0) {
+          setPositionId(data[0].positions[0].id); 
+        }
       } catch (err) {
-        setError('Ошибка загрузки списка должностей: ' + (err.message || 'Неизвестная ошибка'));
+        setError('Не удалось загрузить список должностей.');
+        console.error('Error fetching positions:', err);
       } finally {
-        setLoading(false);
+        setPositionsLoading(false);
       }
     };
+
     fetchPositions();
-  }, []);
+  }, []); // Пустой массив зависимостей для выполнения один раз
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
-    setSuccessMessage('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Пароли не совпадают');
-      return;
-    }
-
+    setSuccess('');
     setLoading(true);
+
     try {
-      const registrationData = {
-        full_name: formData.fullName,
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-        confirm_password: formData.confirmPassword,
-        // Преобразуем positionId в число или null, если не выбрано
-        position_id: formData.positionId ? parseInt(formData.positionId, 10) : null,
-      };
-      await register(registrationData);
-      setSuccessMessage('Регистрация прошла успешно! Теперь вы можете войти.');
-      // Очистка формы после успеха
-      setFormData({
-        fullName: '', username: '', email: '', password: '', confirmPassword: '', positionId: ''
-      });
-      // Можно добавить небольшую задержку перед редиректом
+       // Передаем position_id вместо role
+      const newUser = { username, email, password, position_id: parseInt(positionId, 10) }; // Убедимся, что ID - число
+      if (!positionId) {
+          throw new Error('Пожалуйста, выберите должность.'); // Добавим проверку
+      }
+      await register(newUser);
+      setSuccess('Регистрация прошла успешно! Теперь вы можете войти.');
+      // Очистить поля формы после успешной регистрации (опционально)
+      // setUsername('');
+      // setEmail('');
+      // setPassword('');
+      // setRole('employee');
+      // Можно добавить небольшую задержку перед перенаправлением на страницу входа
       setTimeout(() => {
         navigate('/login');
-      }, 2000); // Редирект на страницу входа через 2 секунды
+      }, 2000); // 2 секунды задержки
     } catch (err) {
-      setError('Ошибка регистрации: ' + (err.message || 'Неизвестная ошибка'));
+      // console.error('Registration error:', err); // Лог ошибки
+      setError(err.message || 'Ошибка регистрации. Пожалуйста, попробуйте еще раз.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="register-page">
-      <h2>Регистрация</h2>
-      <form onSubmit={handleSubmit} className="register-form">
-        {error && <p className="error-message">{error}</p>}
-        {successMessage && <p className="success-message">{successMessage}</p>}
-        {loading && <Loader />}
-
-        <div className="form-group">
-          <label htmlFor="fullName">ФИО:</label>
-          <input
-            type="text"
-            id="fullName"
-            name="fullName"
-            value={formData.fullName}
-            onChange={handleChange}
-            required
-            disabled={loading}
-          />
+    <div className="auth-page register-page"> {/* Добавляем класс register-page */}
+      <div className="auth-container register-container-size"> {/* Новый класс для управления размером */}
+        <div className="form-container"> {/* Убираем register-container класс отсюда */}
+          <h2>Регистрация</h2>
+          <form onSubmit={handleSubmit}>
+            {error && <p className="error-message">{error}</p>}
+            {success && <p className="success-message">{success}</p>}
+            <div className="form-group">
+              <label htmlFor="register-username">Имя пользователя</label>
+              <input
+                type="text"
+                id="register-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="register-email">Email</label>
+              <input
+                type="email"
+                id="register-email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="register-password">Пароль</label>
+              <input
+                type="password"
+                id="register-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+              />
+             </div>
+             {/* Заменяем select для role на select для positionId */}
+             <div className="form-group">
+               <label htmlFor="register-position">Должность</label>
+               <select
+                 id="register-position"
+                 value={positionId}
+                 onChange={(e) => setPositionId(e.target.value)}
+                 required
+                 disabled={loading || positionsLoading} // Блокируем во время загрузки должностей
+               >
+                 {positionsLoading ? (
+                   <option value="" disabled>Загрузка должностей...</option>
+                 ) : positionsData.length === 0 ? (
+                     <option value="" disabled>Нет доступных должностей</option>
+                 ) : (
+                   // Генерируем группы и опции из positionsData
+                   positionsData.map(group => (
+                     <optgroup label={group.name} key={group.id}>
+                       {group.positions && group.positions.map(position => (
+                         <option value={position.id} key={position.id}>
+                           {position.name}
+                         </option>
+                       ))}
+                     </optgroup>
+                   ))
+                 )}
+               </select>
+             </div>
+            <button type="submit" disabled={loading || positionsLoading}>
+              {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+            </button>
+          </form>
+           <Link to="/login" className="toggle-link"> {/* Используем Link */}
+             Уже есть аккаунт? Войдите
+           </Link>
         </div>
-        <div className="form-group">
-          <label htmlFor="username">Логин (имя пользователя):</label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            required
-            disabled={loading}
-          />
-        </div>
-         <div className="form-group">
-          <label htmlFor="email">Email:</label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            disabled={loading}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="password">Пароль:</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            disabled={loading}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="confirmPassword">Повторите пароль:</label>
-          <input
-            type="password"
-            id="confirmPassword"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-            disabled={loading}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="positionId">Должность:</label>
-          <select
-            id="positionId"
-            name="positionId"
-            value={formData.positionId}
-            onChange={handleChange}
-            required // Сделать обязательным? Решите сами
-            disabled={loading || positions.length === 0} // Блокируем, если должности не загружены
-          >
-            <option value="">-- Выберите должность --</option>
-            {positions.map(group => (
-              <optgroup label={group.name} key={group.id}>
-                {group.positions && group.positions.map(position => (
-                  <option value={position.id} key={position.id}>
-                    {position.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        <button type="submit" disabled={loading}>
-          {loading ? 'Регистрация...' : 'Зарегистрироваться'}
-        </button>
-      </form>
-       <p className="login-link">
-         Уже есть аккаунт? <a href="/login">Войти</a>
-       </p>
+      </div>
     </div>
   );
 }

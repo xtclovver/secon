@@ -96,6 +96,13 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// UserUpdateDTO - структура для обновления данных пользователя
+type UserUpdateDTO struct {
+	FullName   *string `json:"full_name"`   // Указатель, чтобы различать пустую строку и отсутствие значения
+	Password   *string `json:"password"`    // Указатель для опционального обновления пароля
+	PositionID *int    `json:"position_id"` // Указатель для опционального обновления должности (только для админа/менеджера)
+}
+
 // PositionGroup - модель группы должностей
 type PositionGroup struct {
 	ID        int        `json:"id" db:"id"`
