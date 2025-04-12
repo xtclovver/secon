@@ -35,23 +35,29 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 
 // FindByLogin находит пользователя по логину
 func (r *UserRepository) FindByLogin(login string) (*models.User, error) { // Изменено FindByUsername на FindByLogin
-	// Запрос к БД для поиска пользователя
+	// Запрос к БД для поиска пользователя с названием должности
 	query := `
-		SELECT id, login, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at
-		FROM users
-		WHERE login = ?` // username -> login
+		SELECT 
+			u.id, u.login, u.password, u.full_name, u.email, 
+			u.department_id, u.position_id, p.name AS position_name, 
+			u.is_admin, u.is_manager, u.created_at, u.updated_at
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		WHERE u.login = ?` // Добавлен LEFT JOIN и выборка p.name
 
 	row := r.db.QueryRow(query, login) // username -> login
 	user := &models.User{}
 
-	// Используем nullable типы для department_id и position_id
+	// Используем nullable типы для department_id, position_id и position_name
 	var departmentID sql.NullInt64
 	var positionID sql.NullInt64
+	var positionName sql.NullString // Для названия должности
 
 	err := row.Scan(
 		&user.ID, &user.Login, &user.Password, &user.FullName, &user.Email, // Username -> Login
 		&departmentID, // Сканируем в nullable тип
 		&positionID,   // Сканируем в nullable тип
+		&positionName, // Сканируем название должности
 		&user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -80,24 +86,44 @@ func (r *UserRepository) FindByLogin(login string) (*models.User, error) { // И
 		user.PositionID = nil
 	}
 
+	// Преобразуем nullable position_name в указатель на string
+	if positionName.Valid {
+		user.PositionName = &positionName.String
+	} else {
+		user.PositionName = nil // Явно устанавливаем nil, если имя должности NULL
+	}
+
 	return user, nil
 }
 
 // FindByID находит пользователя по ID
 func (r *UserRepository) FindByID(id int) (*models.User, error) {
+	// Запрос к БД для поиска пользователя с названием должности
 	query := `
-		SELECT id, login, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at
-		FROM users
-		WHERE id = ?` // username -> login
+		SELECT 
+			u.id, u.login, u.password, u.full_name, u.email, 
+			u.department_id, u.position_id, p.name AS position_name, 
+			u.is_admin, u.is_manager, u.created_at, u.updated_at
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		WHERE u.id = ?` // Добавлен LEFT JOIN и выборка p.name
 
 	row := r.db.QueryRow(query, id)
 	user := &models.User{}
-	var departmentID sql.NullInt64
-	var positionID sql.NullInt64
+
+	// Используем nullable типы для department_id, position_id и position_name
+	var (
+		departmentID sql.NullInt64
+		positionID   sql.NullInt64
+		positionName sql.NullString // Для названия должности
+	)
 
 	err := row.Scan(
 		&user.ID, &user.Login, &user.Password, &user.FullName, &user.Email, // Username -> Login
-		&departmentID, &positionID, &user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
+		&departmentID, // Сканируем в nullable тип
+		&positionID,   // Сканируем в nullable тип
+		&positionName, // Сканируем название должности
+		&user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -119,6 +145,13 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 		user.PositionID = &posID
 	} else {
 		user.PositionID = nil
+	}
+
+	// Преобразуем nullable position_name в указатель на string
+	if positionName.Valid {
+		user.PositionName = &positionName.String
+	} else {
+		user.PositionName = nil // Явно устанавливаем nil, если имя должности NULL
 	}
 
 	return user, nil

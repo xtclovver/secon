@@ -148,9 +148,9 @@ function UserProfilePage() {
       <div className="profile-info">
         <p><strong>Имя пользователя:</strong> {currentUser.username}</p>
         <p><strong>Email:</strong> {currentUser.email}</p>
-        {/* TODO: Отобразить название отдела и должности, если они есть */}
+        {/* TODO: Отобразить название отдела, если оно будет добавлено */}
         {/* <p><strong>Отдел:</strong> {currentUser.department_name || 'Не указан'}</p> */}
-        {/* <p><strong>Должность:</strong> {currentUser.position_name || 'Не указана'}</p> */}
+        <p><strong>Должность:</strong> {currentUser.positionName || 'Не указана'}</p> {/* Отображаем должность */}
         <p><strong>Дата создания:</strong> {new Date(currentUser.created_at).toLocaleString()}</p>
         <p><strong>Дата обновления:</strong> {new Date(currentUser.updated_at).toLocaleString()}</p>
         {/* Возвращаем isAdmin и isManager */}

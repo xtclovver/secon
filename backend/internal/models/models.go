@@ -89,7 +89,8 @@ type User struct {
 	FullName     string    `json:"full_name" db:"full_name"`
 	Email        string    `json:"email" db:"email"`
 	DepartmentID *int      `json:"department_id" db:"department_id"`
-	PositionID   *int      `json:"position_id" db:"position_id"` // Добавлено поле для должности
+	PositionID   *int      `json:"position_id,omitempty" db:"position_id"`    // Добавлено поле для должности, omitempty если не будет имени
+	PositionName *string   `json:"positionName,omitempty" db:"position_name"` // Изменен JSON тег на positionName
 	IsAdmin      bool      `json:"is_admin" db:"is_admin"`
 	IsManager    bool      `json:"is_manager" db:"is_manager"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
