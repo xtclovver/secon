@@ -20,12 +20,12 @@ type VacationServiceInterface interface {
 	SubmitVacationRequest(requestID int, userID int) error
 	CheckIntersections(departmentID int, year int) ([]models.Intersection, error)
 	NotifyManager(managerID int, intersections []models.Intersection) error
-	GetUserVacations(userID int, year int, statusFilter *int) ([]models.VacationRequest, error)             // Добавлен statusFilter
-	GetDepartmentVacations(departmentID int, year int, statusFilter *int) ([]models.VacationRequest, error) // Добавлен statusFilter
+	GetUserVacations(userID int, year int, statusFilter *int) ([]models.VacationRequest, error)                                                                          // Добавлен statusFilter
+	GetDepartmentVacations(departmentID int, year int, statusFilter *int) ([]models.VacationRequest, error)                                                              // Добавлен statusFilter
 	GetAllUserVacations(requestingUserID int, yearFilter *int, statusFilter *int, userIDFilter *int, departmentIDFilter *int) ([]models.VacationRequestAdminView, error) // Добавлен метод для админов/менеджеров
-	CancelVacationRequest(requestID int, cancellingUserID int) error                                                                                                  // Изменен параметр
-	ApproveVacationRequest(requestID int, approverID int) error                                                                                                       // Новый метод
-	RejectVacationRequest(requestID int, rejecterID int, reason string) error                                                                                           // Новый метод
+	CancelVacationRequest(requestID int, cancellingUserID int) error                                                                                                     // Изменен параметр
+	ApproveVacationRequest(requestID int, approverID int) error                                                                                                          // Новый метод
+	RejectVacationRequest(requestID int, rejecterID int, reason string) error                                                                                            // Новый метод
 }
 
 // VacationRepositoryInterface определяет методы для работы с данными отпусков.
@@ -38,10 +38,10 @@ type VacationRepositoryInterface interface {
 	// --- Заявки ---
 	GetVacationRequestByID(requestID int) (*models.VacationRequest, error) // Добавлен метод получения заявки по ID
 	SaveVacationRequest(request *models.VacationRequest) error
-	UpdateVacationRequest(request *models.VacationRequest) error // Для обновления комментария и т.д. пользователем
-	UpdateRequestStatusByID(requestID int, newStatusID int) error // Изменен: обновляет статус по ID заявки (без userID)
-	GetVacationRequestsByUser(userID int, year int, statusFilter *int) ([]models.VacationRequest, error)                                           // Добавлен statusFilter (указатель на int)
-	GetVacationRequestsByDepartment(departmentID int, year int, statusFilter *int) ([]models.VacationRequest, error)                               // Добавлен statusFilter
+	UpdateVacationRequest(request *models.VacationRequest) error                                                                                      // Для обновления комментария и т.д. пользователем
+	UpdateRequestStatusByID(requestID int, newStatusID int) error                                                                                     // Изменен: обновляет статус по ID заявки (без userID)
+	GetVacationRequestsByUser(userID int, year int, statusFilter *int) ([]models.VacationRequest, error)                                              // Добавлен statusFilter (указатель на int)
+	GetVacationRequestsByDepartment(departmentID int, year int, statusFilter *int) ([]models.VacationRequest, error)                                  // Добавлен statusFilter
 	GetAllVacationRequests(yearFilter *int, statusFilter *int, userIDFilter *int, departmentIDFilter *int) ([]models.VacationRequestAdminView, error) // Добавлен метод для админов/менеджеров с фильтрами
 
 	// --- Уведомления ---
@@ -98,13 +98,31 @@ func (s *VacationService) ValidateVacationRequest(request *models.VacationReques
 	totalDays := 0
 
 	if len(request.Periods) == 0 {
-		return errors.New("Необходимо указать хотя бы один период отпуска")
+		return errors.New("необходимо указать хотя бы один период отпуска")
 	}
 
+	// Сортируем периоды по дате начала для упрощения проверки пересечений
+	// sort.Slice(request.Periods, func(i, j int) bool {
+	//  return request.Periods[i].StartDate.Time.Before(request.Periods[j].StartDate.Time)
+	// })
+	// Примечание: Сортировка не обязательна для логики ниже, но может быть полезна. Пока оставим без сортировки.
+
 	for i, period := range request.Periods {
-		// Проверка корректности дат периода, используя .Time
+		// 1. Проверка корректности дат внутри одного периода
 		if period.StartDate.IsZero() || period.EndDate.IsZero() || period.EndDate.Time.Before(period.StartDate.Time) {
-			return fmt.Errorf("некорректные даты в периоде %d", i+1)
+			return fmt.Errorf("некорректные даты в периоде %d: дата начала %s, дата окончания %s",
+				i+1, period.StartDate.Format("2006-01-02"), period.EndDate.Format("2006-01-02"))
+		}
+
+		// 2. Проверка пересечений с *другими* периодами в *этой же* заявке
+		for j := i + 1; j < len(request.Periods); j++ {
+			otherPeriod := request.Periods[j]
+			// Используем существующую вспомогательную функцию doPeriodIntersect
+			if doPeriodIntersect(period, otherPeriod) {
+				return fmt.Errorf("периоды %d (%s - %s) и %d (%s - %s) в заявке пересекаются",
+					i+1, period.StartDate.Format("2006-01-02"), period.EndDate.Format("2006-01-02"),
+					j+1, otherPeriod.StartDate.Format("2006-01-02"), otherPeriod.EndDate.Format("2006-01-02"))
+			}
 		}
 		// Доверяем DaysCount из запроса
 		totalDays += period.DaysCount
@@ -138,11 +156,15 @@ func (s *VacationService) ValidateVacationRequest(request *models.VacationReques
 		availableDays = limit.TotalDays - limit.UsedDays
 	}
 
-	if totalDays > availableDays {
-		return errors.New("Превышен доступный лимит дней отпуска")
+	// Изменено: Проверка, что запрошено ТОЧНО столько дней, сколько доступно
+	// (Исходя из интерпретации "все назначенные дни были израсходованы")
+	// ВНИМАНИЕ: Это может быть не стандартным поведением. Обычно проверяют totalDays <= availableDays.
+	// Если нужно стандартное поведение (не превышать лимит), верните проверку if totalDays > availableDays
+	if totalDays != availableDays {
+		return fmt.Errorf("запрошенное количество дней (%d) не совпадает с доступным лимитом (%d)", totalDays, availableDays)
 	}
 
-	return nil
+	return nil // Все проверки пройдены
 }
 
 // SaveVacationRequest сохраняет заявку на отпуск
@@ -175,7 +197,14 @@ func (s *VacationService) SubmitVacationRequest(requestID int, userID int) error
 		return errors.New("можно отправить только заявку в статусе 'Черновик'")
 	}
 
-	// 4. Обновляем статус на "На рассмотрении"
+	// 4. **Валидируем заявку перед отправкой**
+	err = s.ValidateVacationRequest(req) // Вызываем существующую функцию валидации
+	if err != nil {
+		// Если валидация не прошла, возвращаем ошибку
+		return fmt.Errorf("ошибка валидации заявки перед отправкой: %w", err)
+	}
+
+	// 5. Обновляем статус на "На рассмотрении"
 	err = s.vacationRepo.UpdateRequestStatusByID(requestID, models.StatusPending)
 	if err != nil {
 		return fmt.Errorf("ошибка обновления статуса заявки на 'На рассмотрении': %w", err)
@@ -543,6 +572,7 @@ func (s *VacationService) RejectVacationRequest(requestID int, rejecterID int, r
 
 	return nil
 }
+
 // Вспомогательные функции
 
 // doPeriodIntersect проверяет, пересекаются ли два периода отпуска, используя .Time
