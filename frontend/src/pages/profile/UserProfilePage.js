@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react'; // Добавлен useRef
 import { UserContext } from '../../context/UserContext';
 import { updateUserProfile } from '../../api/users'; // Предполагаем, что функция API создана
 // import { getPositions } from '../../api/positions'; // TODO: Если нужно будет редактировать должность
@@ -16,14 +16,16 @@ function UserProfilePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const successTimeoutRef = useRef(null); // Ref для хранения ID тайм-аута
   // const [positions, setPositions] = useState([]); // TODO: Если нужно будет редактировать должность
 
-  // Заполняем форму данными текущего пользователя при загрузке
+  // Заполняем форму данными текущего пользователя при загрузке и очищаем тайм-аут при размонтировании
   useEffect(() => {
     if (currentUser) {
       setFormData((prevData) => ({
         ...prevData,
-        full_name: currentUser.full_name || '',
+        // Используем fullName (после исправления transformUserKeys)
+        full_name: currentUser.fullName || '',
         // position_id: currentUser.position_id || '', // Пока не редактируем
       }));
     }
@@ -37,7 +39,15 @@ function UserProfilePage() {
     //   }
     // };
     // fetchPositions();
+
+    // Очистка тайм-аута при размонтировании компонента
+    return () => {
+        if (successTimeoutRef.current) {
+            clearTimeout(successTimeoutRef.current);
+        }
+    };
   }, [currentUser]);
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,9 +55,13 @@ function UserProfilePage() {
       ...prevData,
       [name]: value,
     }));
-    // Очищаем сообщения при изменении полей
+    // Очищаем сообщения об ошибках и успехе при любом изменении поля
     setError('');
-    setSuccessMessage('');
+    if (successMessage) setSuccessMessage(''); // Очищаем сообщение об успехе
+    if (successTimeoutRef.current) { // Очищаем таймер, если он был
+        clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = null;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -63,7 +77,8 @@ function UserProfilePage() {
     setIsLoading(true);
 
     const updateData = {};
-    if (formData.full_name && formData.full_name !== currentUser.full_name) {
+    // Используем fullName
+    if (formData.full_name && formData.full_name !== currentUser.fullName) {
       updateData.full_name = formData.full_name;
     }
     if (formData.password) {
@@ -84,7 +99,19 @@ function UserProfilePage() {
 
     try {
       const response = await updateUserProfile(currentUser.id, updateData);
-      setSuccessMessage(response.message || 'Профиль успешно обновлен!');
+      const message = response.message || 'Профиль успешно обновлен!';
+      setSuccessMessage(message);
+
+      // Устанавливаем таймер для скрытия сообщения об успехе через 3 секунды
+       if (successTimeoutRef.current) {
+            clearTimeout(successTimeoutRef.current); // Очищаем предыдущий таймер, если есть
+       }
+      successTimeoutRef.current = setTimeout(() => {
+        setSuccessMessage('');
+        successTimeoutRef.current = null;
+      }, 3000);
+
+
       // Очищаем поля пароля после успешного обновления
       setFormData((prevData) => ({
         ...prevData,
@@ -95,7 +122,8 @@ function UserProfilePage() {
       // Обновляем данные пользователя в контексте, если ФИО изменилось
       if (updateData.full_name) {
           // Создаем новый объект пользователя с обновленным именем
-          const updatedUser = { ...currentUser, full_name: updateData.full_name };
+          // Используем fullName
+          const updatedUser = { ...currentUser, fullName: updateData.full_name };
           // Обновляем контекст
           setUser(updatedUser);
           // Обновляем localStorage (если используется для хранения данных пользователя)
@@ -123,9 +151,10 @@ function UserProfilePage() {
         {/* TODO: Отобразить название отдела и должности, если они есть */}
         {/* <p><strong>Отдел:</strong> {currentUser.department_name || 'Не указан'}</p> */}
         {/* <p><strong>Должность:</strong> {currentUser.position_name || 'Не указана'}</p> */}
-        <p><strong>Дата создания:</strong> {new Date(currentUser.created_at).toLocaleDateString()}</p>
-        <p><strong>Дата обновления:</strong> {new Date(currentUser.updated_at).toLocaleDateString()}</p>
-        <p><strong>Роли:</strong> {currentUser.is_admin ? 'Администратор' : ''} {currentUser.is_manager ? 'Руководитель' : ''} {!currentUser.is_admin && !currentUser.is_manager ? 'Сотрудник' : ''}</p>
+        <p><strong>Дата создания:</strong> {new Date(currentUser.created_at).toLocaleString()}</p>
+        <p><strong>Дата обновления:</strong> {new Date(currentUser.updated_at).toLocaleString()}</p>
+        {/* Возвращаем isAdmin и isManager */}
+        <p><strong>Роли:</strong> {[currentUser.isAdmin && 'Администратор', currentUser.isManager && 'Руководитель', !currentUser.isAdmin && !currentUser.isManager && 'Сотрудник'].filter(Boolean).join(', ') || 'Сотрудник'}</p> 
       </div>
 
       <form onSubmit={handleSubmit} className="profile-form">
@@ -195,9 +224,24 @@ function UserProfilePage() {
           </div>
         )} */}
 
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? <Loader size="small" /> : 'Сохранить изменения'}
-        </button>
+        {/* Вычисляем, были ли изменения */}
+        {(() => {
+           // Убедимся, что currentUser существует перед доступом к его свойствам
+           // Используем fullName
+           const originalFullName = currentUser?.fullName || '';
+           const hasNameChanged = formData.full_name !== originalFullName;
+           const hasPasswordChanged = !!formData.password;
+           // TODO: Добавить проверку изменения должности, если она будет добавлена
+           // const originalPositionId = currentUser?.position_id || '';
+           // const hasPositionChanged = formData.position_id !== originalPositionId;
+           const hasChanges = hasNameChanged || hasPasswordChanged; // || hasPositionChanged;
+
+           return (
+              <button type="submit" disabled={isLoading || !hasChanges}>
+                {isLoading ? <Loader size="small" /> : 'Сохранить изменения'}
+              </button>
+           );
+        })()}
       </form>
     </div>
   );

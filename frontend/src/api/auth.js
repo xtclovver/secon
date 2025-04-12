@@ -65,11 +65,16 @@ const transformUserKeys = (backendUser) => {
   // Преобразуем is_manager в isManager
   if (frontendUser.hasOwnProperty('is_manager')) {
     frontendUser.isManager = frontendUser.is_manager;
-    delete frontendUser.is_manager; // Удаляем старый ключ
+     delete frontendUser.is_manager; // Удаляем старый ключ
+  }
+
+  // Преобразуем full_name в fullName
+  if (frontendUser.hasOwnProperty('full_name')) {
+    frontendUser.fullName = frontendUser.full_name;
+    delete frontendUser.full_name; // Удаляем старый ключ
   }
   
   // Добавьте здесь преобразование других ключей при необходимости
-  // Например: frontendUser.fullName = frontendUser.full_name; delete frontendUser.full_name;
 
   return frontendUser;
 };

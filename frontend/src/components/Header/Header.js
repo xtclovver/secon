@@ -111,7 +111,8 @@ const Header = () => {
                 {user?.isManager && (
                   <NavLink to="/manager/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Дашборд руководителя</NavLink>
                 )}
-                {user?.isAdmin && (
+                {/* Возвращаем isAdmin */}
+                {user?.isAdmin && ( 
                   <NavLink to="/admin/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Админ-панель</NavLink>
                 )}
                  <button onClick={() => { handleLogout(); closeMobileMenu(); }} className="mobile-logout-button">
@@ -166,9 +167,10 @@ const Header = () => {
               aria-label="Профиль пользователя"
             >
               <FaUser />
+              {/* Используем fullName (после исправления transformUserKeys) */}
               <span className="user-name">{user?.fullName || 'Пользователь'}</span>
             </button>
-            
+
             <AnimatePresence>
               {isProfileOpen && (
                 <motion.div 
@@ -181,14 +183,17 @@ const Header = () => {
                 >
                   <div className="menu-header">
                     <div className="user-info">
+                      {/* Используем fullName */}
                       <strong>{user?.fullName}</strong>
                       <span className="user-email">{user?.email}</span>
                       {/* --- DEBUGGING ROLES --- */}
-                      {console.log(`Header Role Check: isAdmin=${user?.isAdmin}, isManager=${user?.isManager}`)}
+                      {/* Используем isAdmin и isManager */}
+                      {console.log(`Header Role Check: isAdmin=${user?.isAdmin}, isManager=${user?.isManager}`)} 
                       {/* Отображение ролей */}
-                      {user?.isManager && <span className="user-role manager">Руководитель</span>}
-                      {user?.isAdmin && <span className="user-role admin">Администратор</span>}
-                     {!user?.isManager && !user?.isAdmin && <span className="user-role">Сотрудник</span>}
+                      {user?.isManager && <span className="user-role manager">Руководитель</span>} 
+                      {user?.isAdmin && <span className="user-role admin">Администратор</span>} 
+                      {/* Проверяем оба флага перед отображением "Сотрудник" */}
+                      {!user?.isManager && !user?.isAdmin && <span className="user-role">Сотрудник</span>} 
                     </div>
                   </div>
                   <ul className="menu-list">
