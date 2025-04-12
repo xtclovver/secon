@@ -269,3 +269,41 @@ select {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Стили для значка должности */
+.user-position-badge {
+  display: inline-block;
+  padding: 0.25em 0.6em; /* Отступы внутри */
+  font-size: 0.8em;      /* Уменьшенный размер шрифта */
+  font-weight: 600;     /* Полужирный шрифт */
+  line-height: 1;
+  color: var(--position-badge-text); /* Цвет текста из переменной */
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: var(--border-radius-md); /* Скругление */
+  margin-left: 0.5em; /* Небольшой отступ слева */
+  transition: background-color var(--transition-fast);
+}
+
+/* Цвета фона для разных уровней */
+.user-position-badge.position-level-0 {
+  background-color: var(--position-level-0-bg);
+}
+.user-position-badge.position-level-1 {
+  background-color: var(--position-level-1-bg);
+}
+.user-position-badge.position-level-2 {
+  background-color: var(--position-level-2-bg);
+}
+.user-position-badge.position-level-3 {
+  background-color: var(--position-level-3-bg);
+}
+
+/* Коррекция цвета текста для светлых фонов в темной теме */
+[data-theme="dark"] .user-position-badge.position-level-1,
+[data-theme="dark"] .user-position-badge.position-level-2 {
+   /* Если в variables.css определен темный текст для темной темы */
+   color: var(--position-badge-text); /* Используем переменную, которая может быть разной */
+   /* Если переменная всегда белая, можно жестко задать: color: #121212; */
+}

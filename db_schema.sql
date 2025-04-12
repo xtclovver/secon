@@ -185,8 +185,8 @@ INSERT INTO positions (name, group_id) VALUES
 INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_manager) VALUES ( -- username -> login
     'admin',
     '$2a$10$0o8J93t0x.QGq4syvzMPnuqwf4vM2UbTbqk7NfN4XNp/F.pvGTw4a', -- Хеш для 'admin'
-    'Admin User',
-    'admin@example.com',
+    'Админ Админов Админович',
+    'admin',
     (SELECT id FROM positions WHERE name = 'Начальник отдела'),
     TRUE, -- is_admin
     TRUE  -- is_manager (Начальник отдела - руководитель)
@@ -196,8 +196,8 @@ INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_
 INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_manager) VALUES ( -- username -> login
     'manager',
     '$2a$10$qCTjGMYRcS.bYB/ZGlzOmuqtfcjea74VGyE0en0Qu/6Cr9qo0.hnS', -- Хеш для 'manager'
-    'Manager User',
-    'manager@example.com',
+    'Менеджеров Менеджр Менеджерович',
+    'manager',
     (SELECT id FROM positions WHERE name = 'Руководитель управления'),
     TRUE, -- is_admin
     TRUE  -- is_manager (Руководитель управления - руководитель)
@@ -207,8 +207,8 @@ INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_
 INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_manager) VALUES ( -- username -> login
     'user',
     '$2a$10$dNyRdXMY4G0gnnjyos7rFOziXUCjqPFVxUROTvwNhZA/440zmtOn6', -- Хеш для 'user'
-    'User User',
-    'user@example.com',
+    'Юзер Юзер Юзерович',
+    'user',
     (SELECT id FROM positions WHERE name = 'Специалист I категории'),
     FALSE, -- is_admin
     FALSE  -- is_manager

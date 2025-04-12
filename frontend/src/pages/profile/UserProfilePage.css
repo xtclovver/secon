@@ -104,12 +104,12 @@
 .save-button {
   display: inline-block;
   padding: 14px 25px; /* Увеличенные отступы */
-  /* Используем ПРАВИЛЬНУЮ переменную основного акцентного цвета темы */
-  background-color: var(--accent-color);
-  /* Устанавливаем белый цвет текста, хорошо контрастирует с синим */
-  color: white; /* Белый текст обычно хорошо подходит для акцентного цвета */
-  /* Убираем рамку или делаем ее в цвет фона */
-  border: none;
+  /* Используем переменную цвета успеха (зеленый) с !important */
+  background-color: var(--success-color) !important;
+  /* Устанавливаем белый цвет текста с !important */
+  color: white !important; 
+  /* Убираем рамку, зеленый цвет сам по себе контрастен */
+  border: none; 
   /* border: 1px solid var(--primary-color-dark); */ /* Альтернатива: темная рамка */
   border-radius: 5px; /* Скругленные углы */
   cursor: pointer;
@@ -125,8 +125,9 @@
 }
 
 .save-button:hover:not(:disabled) {
-  /* Используем ПРАВИЛЬНУЮ переменную для наведения */
-  background-color: var(--accent-hover);
+  /* Затемняем основной зеленый цвет для hover-эффекта с !important */
+  /* Используем filter, так как нет переменной --success-hover */
+  background-color: color-mix(in srgb, var(--success-color) 85%, black) !important; /* Затемняем на 15% */
   /* border-color: var(--accent-hover); */ /* Можно добавить рамку, если нужно */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Более заметная тень при наведении */
   transform: translateY(-1px); /* Легкий подъем */
@@ -135,16 +136,15 @@
 .save-button:active:not(:disabled) {
     transform: translateY(0); /* Возвращаем на место при клике */
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Возвращаем тень */
-    /* Используем цвет наведения для состояния active */
-    background-color: var(--accent-hover);
+    /* Используем тот же затемненный цвет, что и для hover, с !important */
+    background-color: color-mix(in srgb, var(--success-color) 85%, black) !important;
 }
-
 
 .save-button:focus {
   outline: none; /* Убираем стандартный outline */
-  /* Используем основной акцентный цвет для "свечения" при фокусе с прозрачностью */
-  /* Так как нет --accent-color-focus, создаем эффект с rgba */
-  box-shadow: 0 0 0 3px rgba(from var(--accent-color) r g b / 0.5); /* Используем цвет из переменной с alpha */
+  /* Используем основной цвет успеха для "свечения" при фокусе с прозрачностью */
+  /* Создаем эффект с rgba, используя цвет из переменной --success-color */
+  box-shadow: 0 0 0 3px rgba(from var(--success-color) r g b / 0.5); 
 }
 
 .save-button:disabled {

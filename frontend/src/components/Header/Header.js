@@ -186,15 +186,11 @@ const Header = () => {
                     <div className="user-info">
                       {/* Используем fullName */}
                       <strong>{user?.fullName}</strong>
-                      <span className="user-email">{user?.email}</span>
-                      {/* --- DEBUGGING ROLES --- */}
-                      {/* Используем isAdmin и isManager */}
-                      {console.log(`Header Role Check: isAdmin=${user?.isAdmin}, isManager=${user?.isManager}`)} 
-                      {/* Отображение ролей */}
-                      {user?.isManager && <span className="user-role manager">Руководитель</span>} 
-                      {user?.isAdmin && <span className="user-role admin">Администратор</span>} 
-                      {/* Проверяем оба флага перед отображением "Сотрудник" */}
-                      {!user?.isManager && !user?.isAdmin && <span className="user-role">Сотрудник</span>} 
+                      {/* Email убран по запросу */}
+                      {/* Отображаем должность вместо ролей, со стилем */}
+                      <span className={`user-position-badge ${getPositionLevelClass(user?.positionName)}`}>
+                          {user?.positionName || 'Не указана'}
+                      </span>
                     </div>
                   </div>
                   <ul className="menu-list">
@@ -222,5 +218,22 @@ const Header = () => {
     </header>
   );
 };
+
+// Вспомогательная функция для определения класса стиля должности (дублируется здесь, в идеале вынести в утилиты)
+const getPositionLevelClass = (positionName) => {
+  if (!positionName) return 'position-level-0'; // По умолчанию
+  const lowerPos = positionName.toLowerCase();
+  // Уровни важности (можно настроить)
+  if (lowerPos.includes('директор') || lowerPos.includes('руководитель') || lowerPos.includes('начальник')) {
+    return 'position-level-3'; // Красный
+  } else if (lowerPos.includes('менеджер') || lowerPos.includes('ведущий') || lowerPos.includes('старший')) {
+    return 'position-level-2'; // Оранжевый
+  } else if (lowerPos.includes('специалист') || lowerPos.includes('инженер') || lowerPos.includes('бухгалтер')) {
+     return 'position-level-1'; // Желтый
+  } else {
+    return 'position-level-0'; // Синий (обычный сотрудник)
+  }
+};
+
 
 export default Header;
