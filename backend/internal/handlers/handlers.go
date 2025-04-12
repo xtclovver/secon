@@ -476,7 +476,7 @@ func NewAuthHandler(as *services.AuthService) *AuthHandler {
 // Login - обработчик для входа пользователя
 func (h *AuthHandler) Login(c *gin.Context) {
 	var credentials struct {
-		Username string `json:"username" binding:"required"`
+		Login    string `json:"login" binding:"required"` // username -> login
 		Password string `json:"password" binding:"required"`
 	}
 
@@ -487,7 +487,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Вызываем сервис для проверки логина и пароля
-	token, user, err := h.authService.Login(credentials.Username, credentials.Password)
+	token, user, err := h.authService.Login(credentials.Login, credentials.Password) // credentials.Username -> credentials.Login
 	if err != nil {
 		// Если сервис вернул ошибку (неверные данные, ошибка БД и т.д.)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
@@ -503,17 +503,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 // Register - обработчик для регистрации нового пользователя
 func (h *AuthHandler) Register(c *gin.Context) {
+	// Структура для входящих данных (PascalCase как ожидает фронтенд/валидатор)
+	// Username заменено на Login, убрана валидация email для Login
 	var input struct {
-		Username        string `json:"username" binding:"required"`
-		Password        string `json:"password" binding:"required"`
-		ConfirmPassword string `json:"confirm_password" binding:"required"`
-		FullName        string `json:"full_name" binding:"required"`
-		Email           string `json:"email" binding:"required,email"`
-		PositionID      *int   `json:"position_id"` // Должность опциональна при регистрации? Или required? Пока опционально.
+		Login           string `json:"Login" binding:"required"` // username -> Login (PascalCase)
+		Password        string `json:"Password" binding:"required"`
+		ConfirmPassword string `json:"ConfirmPassword" binding:"required"`
+		FullName        string `json:"FullName" binding:"required"`
+		Email           string `json:"Email" binding:"required"` // Оставляем Email, но без валидации email
+		PositionID      *int   `json:"PositionID"`               // Оставляем PositionID в PascalCase
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные: " + err.Error()})
+		// Возвращаем ошибку валидации Gin, которая уже включает детали по полям
+		// Убрали предыдущую ошибку, так как ShouldBindJSON предоставляет лучшую информацию
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные", "details": err.Error()})
 		return
 	}
 
@@ -523,8 +527,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Вызов сервиса регистрации
-	user, err := h.authService.Register(input.Username, input.Password, input.FullName, input.Email, input.PositionID)
+	// Вызов сервиса регистрации - передаем input.Login как login
+	user, err := h.authService.Register(input.Login, input.Password, input.FullName, input.Email, input.PositionID)
 	if err != nil {
 		// Обработка ошибок сервиса (например, пользователь уже существует)
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()}) // Используем 409 Conflict для дубликата

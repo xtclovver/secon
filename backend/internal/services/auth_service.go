@@ -29,26 +29,26 @@ func NewAuthService(userRepo repositories.UserRepositoryInterface, vacationRepo 
 	}
 }
 
-// Login проверяет учетные данные пользователя и возвращает JWT токен (заглушка)
-func (s *AuthService) Login(username, password string) (string, *models.User, error) {
-	// 1. Найти пользователя по имени пользователя
-	user, err := s.userRepo.FindByUsername(username)
+// Login проверяет учетные данные пользователя и возвращает JWT токен
+func (s *AuthService) Login(login, password string) (string, *models.User, error) { // username -> login
+	// 1. Найти пользователя по логину
+	user, err := s.userRepo.FindByLogin(login) // FindByUsername -> FindByLogin, username -> login
 	if err != nil {
 		// Ошибка при запросе к БД
 		return "", nil, errors.New("ошибка при поиске пользователя")
 	}
 	if user == nil {
 		// Пользователь не найден
-		return "", nil, errors.New("неверное имя пользователя или пароль")
+		return "", nil, errors.New("неверный логин или пароль") // username -> логин
 	}
 
 	// !!! ВАЖНО: Дополнительная проверка чувствительности к регистру !!!
-	// Даже если FindByUsername нашел пользователя (возможно, без учета регистра),
-	// мы должны убедиться, что введенное имя пользователя точно совпадает
+	// Даже если FindByLogin нашел пользователя (возможно, без учета регистра),
+	// мы должны убедиться, что введенный логин точно совпадает
 	// с тем, что хранится в базе данных, с учетом регистра.
-	if user.Username != username {
-		// Имена не совпадают с учетом регистра - считаем это неверным вводом
-		return "", nil, errors.New("неверное имя пользователя или пароль")
+	if user.Login != login { // Username -> Login, username -> login
+		// Логины не совпадают с учетом регистра - считаем это неверным вводом
+		return "", nil, errors.New("неверный логин или пароль") // username -> логин
 	}
 
 	// 2. Сравнить хеш пароля из БД с предоставленным паролем
@@ -56,7 +56,7 @@ func (s *AuthService) Login(username, password string) (string, *models.User, er
 	// err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	// if err != nil {
 	// 	// Пароль не совпадает
-	// 	return "", nil, errors.New("неверное имя пользователя или пароль")
+	// 	return "", nil, errors.New("неверный логин или пароль") // username -> логин
 	// }
 
 	// Сравниваем хеш пароля из БД с предоставленным паролем
@@ -64,13 +64,13 @@ func (s *AuthService) Login(username, password string) (string, *models.User, er
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
 		// Пароль не совпадает или другая ошибка bcrypt
-		return "", nil, errors.New("неверное имя пользователя или пароль")
+		return "", nil, errors.New("неверный логин или пароль") // username -> логин
 	}
 
 	// 3. Сгенерировать JWT токен
 	claims := jwt.MapClaims{
-		"user_id":    user.ID, // Используем ID пользователя
-		"username":   user.Username,
+		"user_id":    user.ID,    // Используем ID пользователя
+		"login":      user.Login, // username -> login, Username -> Login
 		"is_admin":   user.IsAdmin,
 		"is_manager": user.IsManager,
 		"exp":        time.Now().Add(time.Hour * 72).Unix(), // Токен действителен 72 часа
@@ -138,20 +138,20 @@ func (s *AuthService) ValidateToken(tokenString string) (*models.User, error) {
 }
 
 // Register создает нового пользователя
-func (s *AuthService) Register(username, password, fullName, email string, positionID *int) (*models.User, error) {
-	// 1. Проверить, существует ли пользователь с таким именем
-	existingUser, err := s.userRepo.FindByUsername(username)
+func (s *AuthService) Register(login, password, fullName, email string, positionID *int) (*models.User, error) { // username -> login
+	// 1. Проверить, существует ли пользователь с таким логином
+	existingUser, err := s.userRepo.FindByLogin(login) // FindByUsername -> FindByLogin, username -> login
 	if err != nil {
 		// Ошибка при запросе к БД
 		return nil, fmt.Errorf("ошибка проверки существующего пользователя: %w", err)
 	}
 	if existingUser != nil {
-		return nil, errors.New("пользователь с таким именем уже существует")
+		return nil, errors.New("пользователь с таким логином уже существует") // именем -> логином
 	}
 
 	// 2. Создать объект пользователя
 	newUser := &models.User{
-		Username:   username,
+		Login:      login,    // Username -> Login, username -> login
 		Password:   password, // Пароль будет хеширован в репозитории
 		FullName:   fullName,
 		Email:      email,

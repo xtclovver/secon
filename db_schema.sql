@@ -20,7 +20,7 @@ CREATE TABLE positions (
 -- Таблица пользователей
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
+    login VARCHAR(50) NOT NULL UNIQUE, -- Изменено с username на login
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL,
@@ -182,7 +182,7 @@ INSERT INTO positions (name, group_id) VALUES
 
 -- Добавление пользователей по умолчанию
 -- admin:admin (Начальник отдела, is_admin=true)
-INSERT INTO users (username, password, full_name, email, position_id, is_admin, is_manager) VALUES (
+INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_manager) VALUES ( -- username -> login
     'admin',
     '$2a$10$0o8J93t0x.QGq4syvzMPnuqwf4vM2UbTbqk7NfN4XNp/F.pvGTw4a', -- Хеш для 'admin'
     'Admin User',
@@ -193,7 +193,7 @@ INSERT INTO users (username, password, full_name, email, position_id, is_admin, 
 );
 
 -- manager:manager (Руководитель управления, is_admin=true)
-INSERT INTO users (username, password, full_name, email, position_id, is_admin, is_manager) VALUES (
+INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_manager) VALUES ( -- username -> login
     'manager',
     '$2a$10$qCTjGMYRcS.bYB/ZGlzOmuqtfcjea74VGyE0en0Qu/6Cr9qo0.hnS', -- Хеш для 'manager'
     'Manager User',
@@ -204,7 +204,7 @@ INSERT INTO users (username, password, full_name, email, position_id, is_admin, 
 );
 
 -- user:user (Специалист I категории, is_admin=false)
-INSERT INTO users (username, password, full_name, email, position_id, is_admin, is_manager) VALUES (
+INSERT INTO users (login, password, full_name, email, position_id, is_admin, is_manager) VALUES ( -- username -> login
     'user',
     '$2a$10$dNyRdXMY4G0gnnjyos7rFOziXUCjqPFVxUROTvwNhZA/440zmtOn6', -- Хеш для 'user'
     'User User',
