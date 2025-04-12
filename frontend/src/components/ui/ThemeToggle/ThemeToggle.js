@@ -24,8 +24,9 @@ const ThemeToggle = () => {
           className="toggle-thumb"
           initial={false}
           animate={{ 
-            x: darkMode ? 28 : 0, // Увеличено смещение для соответствия ширине 48px
-            backgroundColor: darkMode ? '#1a202c' : '#ffffff' 
+            // x: darkMode ? 28 : 0, // Старое значение
+            x: darkMode ? 24 : 2 // Исправлено: 48(track) - 20(thumb) - 2(padding) - 2(left offset) = 24px; 2px для светлой темы
+            // backgroundColor: ... - Удалено, управляется CSS
           }}
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         />

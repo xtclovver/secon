@@ -145,11 +145,12 @@ const VacationsList = () => {
           await actionFunc(id);
           toast.success(successMsg);
           // Обновляем список заявок И лимиты пользователя
-          await fetchVacations(year, statusFilter);
-          if (refreshUserVacationLimits) { // Вызываем обновление лимитов, если функция доступна
-             await refreshUserVacationLimits();
-          }
-      } catch (err) {
+           await fetchVacations(year, statusFilter);
+           if (refreshUserVacationLimits) { // Вызываем обновление лимитов, если функция доступна
+              console.log(`Action successful, refreshing limits for year: ${year}`); // Лог
+              await refreshUserVacationLimits(year); // <-- ИСПРАВЛЕНО: Передаем год
+           }
+       } catch (err) {
           const errMsg = err.response?.data?.error || err.message || `Не удалось выполнить действие.`;
           toast.error(`${errorMsgPrefix}: ${errMsg}`);
           // setLoading(false) не нужен здесь, так как fetchVacations/refreshUserVacationLimits его сбросят
@@ -182,12 +183,13 @@ const VacationsList = () => {
             try {
                 await rejectVacationRequest(id, reason || '');
                 toast.success('Заявка успешно отклонена');
-                // Обновляем список заявок И лимиты пользователя
-                await fetchVacations(year, statusFilter);
-                if (refreshUserVacationLimits) {
-                    await refreshUserVacationLimits();
-                }
-            } catch (err) {
+                 // Обновляем список заявок И лимиты пользователя
+                 await fetchVacations(year, statusFilter);
+                 if (refreshUserVacationLimits) {
+                    console.log(`Rejection successful, refreshing limits for year: ${year}`); // Лог
+                    await refreshUserVacationLimits(year); // <-- ИСПРАВЛЕНО: Передаем год
+                 }
+             } catch (err) {
                 const errMsg = err.response?.data?.error || err.message || `Не удалось отклонить заявку.`;
                 toast.error(`Ошибка отклонения: ${errMsg}`);
             } finally {

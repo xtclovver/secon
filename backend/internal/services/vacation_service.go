@@ -68,17 +68,10 @@ func NewVacationService(vacationRepo VacationRepositoryInterface, userRepo repos
 // GetVacationLimit получает лимит отпуска для пользователя
 func (s *VacationService) GetVacationLimit(userID int, year int) (*models.VacationLimit, error) {
 	// Вызываем метод репозитория отпусков
-	limit, err := s.vacationRepo.GetVacationLimit(userID, year)
-	if err != nil {
-		// Если лимит не найден, можно создать дефолтный (опционально)
-		// Если лимит не найден, возвращаем дефолтное значение лимита (например, 28 дней с 0 использованных)
-		if err.Error() == "лимит отпуска не найден для данного пользователя и года" {
-			defaultLimit := &models.VacationLimit{UserID: userID, Year: year, TotalDays: 28, UsedDays: 0}
-			return defaultLimit, nil
-		}
-		return nil, err // Возвращаем другие ошибки БД
-	}
-	return limit, nil
+	// Теперь GetVacationLimit просто возвращает результат из репозитория,
+	// включая ошибку "не найден", если лимит отсутствует.
+	return s.vacationRepo.GetVacationLimit(userID, year)
+	// Старая логика с дефолтным значением 28 дней удалена.
 }
 
 // SetVacationLimit устанавливает (создает или обновляет) лимит отпуска для пользователя
@@ -136,24 +129,19 @@ func (s *VacationService) ValidateVacationRequest(request *models.VacationReques
 
 	// Проверка лимита дней
 	limit, err := s.GetVacationLimit(request.UserID, request.Year)
-	availableDays := 0 // Инициализируем доступные дни
-
 	if err != nil {
-		// Проверяем, является ли ошибка "лимит не найден"
+		// Если произошла ошибка при получении лимита (включая "не найден"),
+		// логируем и возвращаем ошибку валидации.
+		log.Printf("[Validation Error] UserID: %d, Year: %d - Failed to get vacation limit: %v", request.UserID, request.Year, err)
+		// Возвращаем более понятную ошибку для пользователя/фронтенда
 		if err.Error() == "лимит отпуска не найден для данного пользователя и года" {
-			// Лимит не найден, используем стандартный лимит (например, 28) и считаем, что ничего не использовано
-			// TODO: Возможно, стоит вынести стандартный лимит в конфигурацию
-			const defaultLimit = 28
-			availableDays = defaultLimit
-			// Не возвращаем ошибку, просто используем дефолтное значение
-			// Возвращаем другие ошибки (например, ошибка БД)
-			log.Printf("[Validation Error] UserID: %d, Year: %d - Error getting limit: %v", request.UserID, request.Year, err) // LOGGING
-			return fmt.Errorf("ошибка получения лимита отпуска: %w", err)
+			return fmt.Errorf("лимит отпуска для пользователя %d на %d год не установлен или не найден", request.UserID, request.Year)
 		}
-	} else {
-		// Лимит найден, используем его
-		availableDays = limit.TotalDays - limit.UsedDays
+		return fmt.Errorf("внутренняя ошибка при получении лимита отпуска: %w", err)
 	}
+
+	// Лимит успешно получен, рассчитываем доступные дни
+	availableDays := limit.TotalDays - limit.UsedDays
 
 	// LOGGING: Log values just before the final check
 	log.Printf("[Validation Check] UserID: %d, Year: %d, TotalDaysLimit: %d, UsedDaysLimit: %d, CalculatedAvailable: %d, DaysRequestedInThisRequest: %d",
@@ -191,8 +179,8 @@ func (s *VacationService) SaveVacationRequest(request *models.VacationRequest) e
 	request.DaysRequested = 0 // Сбрасываем на случай повторного сохранения
 	for _, p := range request.Periods {
 		request.DaysRequested += p.DaysCount
-	}
-
+	} // <-- Закрывающая скобка цикла была пропущена перед логом
+	log.Printf("[Service SaveVacationRequest] Calculated DaysRequested: %d for UserID: %d", request.DaysRequested, request.UserID) // LOGGING
 	// Используем vacationRepo
 	return s.vacationRepo.SaveVacationRequest(request)
 }
@@ -237,27 +225,33 @@ func (s *VacationService) SubmitVacationRequest(requestID int, userID int) error
 			return fmt.Errorf("ошибка получения лимита отпуска пользователя %d (год %d) перед отправкой заявки %d: %w", req.UserID, req.Year, requestID, errLimit)
 		}
 
-		availableDays := 0
-		if errLimit != nil && errLimit.Error() == limitNotFoundErrorMsg {
-			// Лимит не найден, используем дефолтный total для проверки
-			const defaultTotalDays = 28 // TODO: Вынести в конфиг
-			availableDays = defaultTotalDays
-		} else if limit != nil {
-			// Лимит найден
-			availableDays = limit.TotalDays - limit.UsedDays
+		// Если GetVacationLimit вернул ошибку (включая "не найден"), то errLimit будет не nil.
+		if errLimit != nil {
+			log.Printf("[Submit Error] UserID: %d, Year: %d, RequestID: %d - Failed to get vacation limit before spending days: %v", req.UserID, req.Year, requestID, errLimit)
+			// Возвращаем понятную ошибку, если лимит не найден
+			if errLimit.Error() == limitNotFoundErrorMsg {
+				return fmt.Errorf("невозможно отправить заявку: лимит отпуска для пользователя %d на %d год не установлен", req.UserID, req.Year)
+			}
+			// Возвращаем общую ошибку для других проблем с БД
+			return fmt.Errorf("внутренняя ошибка при проверке лимита перед отправкой заявки %d: %w", requestID, errLimit)
 		}
 
+		// Лимит успешно получен, проверяем доступные дни
+		availableDays := limit.TotalDays - limit.UsedDays
 		if req.DaysRequested > availableDays {
-			return fmt.Errorf("недостаточно дней отпуска у пользователя %d (год %d) для отправки заявки %d: доступно %d, запрошено %d", req.UserID, req.Year, availableDays, req.DaysRequested, requestID)
+			return fmt.Errorf("недостаточно дней отпуска у пользователя %d (год %d) для отправки заявки %d: доступно %d, запрошено %d", req.UserID, req.Year, availableDays, req.DaysRequested, requestID) // Оставил requestID в сообщении об ошибке
 		}
 
 		// Пытаемся списать дни (увеличить used_days)
 		errSpend := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, req.DaysRequested)
 		if errSpend != nil {
+			log.Printf("[Service SubmitVacationRequest] Failed to spend days. UserID: %d, Year: %d, RequestID: %d, Days: %d, Error: %v", req.UserID, req.Year, requestID, req.DaysRequested, errSpend) // LOGGING
 			// Если списать не удалось, НЕ отправляем заявку
 			return fmt.Errorf("ошибка списания %d дней из лимита пользователя %d (год %d) при отправке заявки %d: %w", req.DaysRequested, req.UserID, req.Year, requestID, errSpend)
 		}
-		fmt.Printf("Успешно списаны дни (%d) для заявки %d пользователя %d (год %d) при отправке.\n", req.DaysRequested, requestID, req.UserID, req.Year)
+		log.Printf("[Service SubmitVacationRequest] Successfully spent days. UserID: %d, Year: %d, RequestID: %d, Days: %d", req.UserID, req.Year, requestID, req.DaysRequested) // LOGGING
+		// Старый Printf заменен на log.Printf
+		// fmt.Printf("Успешно списаны дни (%d) для заявки %d пользователя %d (год %d) при отправке.\n", req.DaysRequested, requestID, req.UserID, req.Year)
 
 	} // Конец блока if req.DaysRequested > 0
 
@@ -472,14 +466,17 @@ func (s *VacationService) CancelVacationRequest(requestID int, cancellingUserID 
 	if originalStatus == models.StatusPending || originalStatus == models.StatusApproved {
 		daysToReturn := req.DaysRequested // Используем сохраненное значение
 		if daysToReturn > 0 {
-			errReturn := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -daysToReturn) // Возвращаем дни
+			log.Printf("[Service CancelVacationRequest] Attempting to return days. UserID: %d, Year: %d, RequestID: %d, Days: %d", req.UserID, req.Year, requestID, daysToReturn) // LOGGING
+			errReturn := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -daysToReturn)                                                                          // Возвращаем дни (отрицательный delta)
 			if errReturn != nil {
-				// Логируем ошибку, но сама отмена уже произошла.
-				fmt.Printf("ВНИМАНИЕ: Заявка %d отменена, но не удалось вернуть %d дней в лимит пользователя %d (год %d): %v\n", requestID, daysToReturn, req.UserID, req.Year, errReturn)
+				// Логируем ошибку подробнее
+				log.Printf("[Service CancelVacationRequest] CRITICAL ERROR: Failed to return days! UserID: %d, Year: %d, RequestID: %d, Days: %d, Error: %v", req.UserID, req.Year, requestID, daysToReturn, errReturn) // LOGGING
 				// TODO: Механизм компенсации или уведомления.
 			} else {
-				fmt.Printf("Успешно возвращены дни (%d) для заявки %d пользователя %d (год %d) при отмене.\n", daysToReturn, requestID, req.UserID, req.Year)
+				log.Printf("[Service CancelVacationRequest] Successfully returned days. UserID: %d, Year: %d, RequestID: %d, Days: %d", req.UserID, req.Year, requestID, daysToReturn) // LOGGING
 			}
+		} else {
+			log.Printf("[Service CancelVacationRequest] No days to return for RequestID: %d (DaysRequested: %d)", requestID, daysToReturn) // LOGGING
 		}
 	} // Конец if originalStatus == Pending || Approved
 
@@ -600,16 +597,18 @@ func (s *VacationService) RejectVacationRequest(requestID int, rejecterID int, r
 	// 5. Возвращаем списанные при отправке дни
 	daysToReturn := req.DaysRequested
 	if daysToReturn > 0 {
-		fmt.Printf("RejectVacationRequest: Попытка возврата %d дней для заявки %d (пользователь %d, год %d)\n", daysToReturn, requestID, req.UserID, req.Year) // Добавлено логирование
-		errReturn := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -daysToReturn)                                                           // Возвращаем дни
+		log.Printf("[Service RejectVacationRequest] Attempting to return days. UserID: %d, Year: %d, RequestID: %d, Days: %d", req.UserID, req.Year, requestID, daysToReturn) // LOGGING
+		errReturn := s.vacationRepo.UpdateVacationLimitUsedDays(req.UserID, req.Year, -daysToReturn)                                                                          // Возвращаем дни (отрицательный delta)
 		if errReturn != nil {
 			// Статус уже "Отклонена", но дни вернуть не удалось. Логируем подробнее.
-			fmt.Printf("КРИТИЧЕСКАЯ ОШИБКА: Заявка %d отклонена, но НЕ удалось вернуть %d дней в лимит пользователя %d (год %d): %v\n", requestID, daysToReturn, req.UserID, req.Year, errReturn)
+			log.Printf("[Service RejectVacationRequest] CRITICAL ERROR: Failed to return days! UserID: %d, Year: %d, RequestID: %d, Days: %d, Error: %v", req.UserID, req.Year, requestID, daysToReturn, errReturn) // LOGGING
 			// ВАЖНО: Возвращаем ошибку пользователю, чтобы он знал о проблеме с возвратом дней!
 			return fmt.Errorf("заявка отклонена, но произошла ошибка при возврате дней в лимит: %w", errReturn)
 		} else {
-			fmt.Printf("Успешно возвращены дни (%d) для заявки %d пользователя %d (год %d) при отклонении.\n", daysToReturn, requestID, req.UserID, req.Year)
+			log.Printf("[Service RejectVacationRequest] Successfully returned days. UserID: %d, Year: %d, RequestID: %d, Days: %d", req.UserID, req.Year, requestID, daysToReturn) // LOGGING
 		}
+	} else {
+		log.Printf("[Service RejectVacationRequest] No days to return for RequestID: %d (DaysRequested: %d)", requestID, daysToReturn) // LOGGING
 	}
 
 	// 6. Добавляем комментарий с причиной отклонения (если нужно)

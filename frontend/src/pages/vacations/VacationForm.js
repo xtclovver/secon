@@ -4,9 +4,9 @@ import DatePicker, { registerLocale } from 'react-datepicker';
 import { toast } from 'react-toastify';
 import { FaCalendarAlt, FaPlus, FaTrash, FaSave, FaPaperPlane } from 'react-icons/fa';
 import ru from 'date-fns/locale/ru';
-import { UserContext } from '../../context/UserContext'; // Импортируем UserContext
-// Убираем getVacationLimit из импортов API, т.к. он больше не нужен здесь
+import { useUser } from '../../context/UserContext'; // Импортируем хук useUser
 import { createVacationRequest, submitVacationRequest } from '../../api/vacations';
+import Loader from '../../components/ui/Loader/Loader'; // Импортируем Loader
 import 'react-datepicker/dist/react-datepicker.css';
 import './VacationForm.css';
 
@@ -14,31 +14,45 @@ import './VacationForm.css';
 registerLocale('ru', ru);
 
 const VacationForm = () => {
-  const { user } = useContext(UserContext); // Получаем пользователя из контекста
-  const [year, setYear] = useState(new Date().getFullYear() + 1);
+  // Используем хук useUser для получения данных и функций из контекста
+  const { user, refreshUserVacationLimits, limitsLoading } = useUser();
+  const [year, setYear] = useState(new Date().getFullYear() + 1); // По умолчанию следующий год
   const [periods, setPeriods] = useState([{ startDate: null, endDate: null, daysCount: 0 }]);
   const [status, setStatus] = useState('draft');
-  // Убираем локальные состояния limit и usedDays
-  // const [limit, setLimit] = useState(28);
-  // const [usedDays, setUsedDays] = useState(0);
-  // const [loading, setLoading] = useState(false); // Больше не загружаем лимит здесь
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [requestId, setRequestId] = useState(null);
+  const [requestId, setRequestId] = useState(null); // Для сохранения ID черновика (если нужно)
 
-  // Получаем актуальные лимиты из контекста пользователя
-  // Используем значения для ТЕКУЩЕГО ВЫБРАННОГО года (year), если они есть в контексте
-  // Если нет, используем дефолтные значения
-  const limitsForSelectedYear = user?.vacationLimits?.[year];
-  const currentLimit = limitsForSelectedYear?.totalDays ?? 28; // Дефолт 28, если нет данных
-  const currentUsedDays = limitsForSelectedYear?.usedDays ?? 0; // Дефолт 0
+  // Удаляем useEffect, который проверял флаг 'loaded' и мешал обновлению
+  // useEffect(() => { ... }, [user, year, refreshUserVacationLimits, limitsLoading]);
 
-  // Убираем useEffect для загрузки лимита
-  // useEffect(() => { ... fetchLimit ... }, [year]);
+  // --- Получение данных о лимитах из контекста ---
+  const limitsData = user?.vacationLimits?.[year];
+  const limitError = limitsData?.error; // Ошибка загрузки лимита для этого года
 
-  // Вычисление общего количества дней (используем currentLimit и currentUsedDays из контекста)
+  // !!! ЛОГИРОВАНИЕ ДАННЫХ ИЗ КОНТЕКСТА !!!
+  console.log(`VacationForm - Selected Year: ${year}`);
+  // console.log(`VacationForm - Full User Context:`, user); // Раскомментируйте для полной информации о пользователе
+  console.log(`VacationForm - Limits Data for ${year} from context:`, limitsData);
+  console.log(`VacationForm - limitsLoading state: ${limitsLoading}`);
+  console.log(`VacationForm - Limit Error for ${year}: ${limitError}`);
+
+  // Используем null как индикатор, что лимит не загружен или не существует
+  const currentLimit = limitsData?.loaded && !limitError ? limitsData.totalDays : null;
+  const currentUsedDays = limitsData?.loaded && !limitError ? limitsData.usedDays : null;
+  const currentAvailableDays = limitsData?.loaded && !limitError ? limitsData.availableDays : null;
+
+  // !!! ЛОГИРОВАНИЕ ВЫЧИСЛЕННЫХ ЗНАЧЕНИЙ !!!
+  console.log(`VacationForm - Calculated Values: currentLimit=${currentLimit}, currentUsedDays=${currentUsedDays}, currentAvailableDays=${currentAvailableDays}`);
+
+
+  // Вычисление запрошенных дней
   const totalDaysRequested = periods.reduce((sum, period) => sum + period.daysCount, 0);
-  const remainingDays = currentLimit - currentUsedDays - totalDaysRequested; // Используем актуальные данные
+
+  // Вычисление оставшихся дней (только если лимиты загружены и без ошибок)
+  const remainingDays = currentAvailableDays !== null
+    ? currentAvailableDays - totalDaysRequested
+    : null;
 
   // Функция для подсчета дней между датами
   const calculateDays = (startDate, endDate) => {
@@ -49,12 +63,24 @@ const VacationForm = () => {
 
   // Обработка изменения года
   const handleYearChange = (e) => {
-    setYear(parseInt(e.target.value));
-    // Сброс периодов и ошибок при смене года
+    const newYear = parseInt(e.target.value);
+    setYear(newYear);
+    // Сброс формы при смене года
     setPeriods([{ startDate: null, endDate: null, daysCount: 0 }]);
     setErrors({});
-    setRequestId(null);
+    setRequestId(null); // Сбрасываем ID заявки, если он был
     setStatus('draft');
+
+    // --- ВСЕГДА вызываем обновление лимитов при смене года ---
+    if (user && !limitsLoading) { // Проверяем только, что есть user и не идет загрузка
+        console.log(`Year changed to ${newYear}. Triggering refreshUserVacationLimits...`);
+        refreshUserVacationLimits(newYear); // Игнорируем флаг 'loaded'
+    } else if (!user) {
+        console.warn("Cannot refresh limits on year change: user context is not available.");
+    } else if (limitsLoading) {
+        console.log(`Year changed to ${newYear}, but limits are already loading.`);
+    }
+    // Старая проверка с 'loaded' удалена
   };
 
   // Обработка изменения дат
@@ -119,20 +145,27 @@ const VacationForm = () => {
         if (!hasLongPeriod && totalRequested > 0) { // Добавляем проверку totalRequested > 0
             currentErrors.longPeriod = 'Одна из частей отпуска должна быть не менее 14 календарных дней.';
         }
-        // Используем currentLimit и currentUsedDays из контекста для проверки лимита
-        const availableDays = currentLimit - currentUsedDays;
-        if (totalRequested > availableDays) {
-            currentErrors.limit = `Превышен доступный лимит дней отпуска (${availableDays} дн.).`;
+        // Проверка лимита дней (только если лимиты загружены и без ошибок)
+        if (currentAvailableDays !== null) {
+            if (totalRequested > currentAvailableDays) {
+                currentErrors.limit = `Превышен доступный лимит дней отпуска (${currentAvailableDays} дн.). Запрошено: ${totalRequested} дн.`;
+            }
+            // Проверка на точное соответствие доступным дням
+            if (totalRequested !== currentAvailableDays && totalRequested > 0) {
+                currentErrors.exactDays = `Необходимо использовать все доступные дни отпуска (${currentAvailableDays} дн.). Запрошено: ${totalRequested} дн.`;
+            }
+        } else if (limitsData?.loaded && !limitError) {
+             // Лимиты загружены, но равны null (возможно, не установлены для пользователя)
+             currentErrors.limitNotSet = 'Лимит отпуска на выбранный год не установлен. Обратитесь к администратору.';
+        } else if (!limitsData?.loaded && !limitsLoading) {
+             // Данные еще не загружены (но и не грузятся) - странная ситуация, но добавим проверку
+             currentErrors.limitNotLoaded = 'Данные о лимите отпуска еще не загружены.';
         }
-
-        // НОВАЯ ПРОВЕРКА: Точное соответствие доступным дням
-        if (totalRequested !== availableDays && totalRequested > 0) { // Проверяем только если дни запрошены
-             currentErrors.exactDays = `Необходимо использовать все доступные дни отпуска (${availableDays} дн.). Запрошено: ${totalRequested} дн.`;
-        }
+        // Если есть ошибка limitError, она будет показана в блоке лимитов, здесь можно не дублировать
     }
-    
-    // Log the errors object *before* setting state
-    console.log("Errors object calculated:", JSON.stringify(currentErrors));
+
+    // Логирование и обновление состояния ошибок
+    console.log("ValidateForm - Calculated Errors:", JSON.stringify(currentErrors));
     
     // Простое обновление состояния
     setErrors({ ...currentErrors }); 
@@ -140,9 +173,10 @@ const VacationForm = () => {
     // Log *after* setting state (хотя это может не показать обновленное значение немедленно)
     // console.log("Called setErrors with:", JSON.stringify(currentErrors)); // Можно убрать этот лог
     
-    const isValid = Object.keys(currentErrors).length === 0;
+    // ИСПРАВЛЕНО: Проверяем 'currentErrors', а не 'errors' из предыдущего состояния
+    const isValid = Object.keys(currentErrors).length === 0; 
     console.log(`validateForm returning: ${isValid}`); // Log the return value
-    return isValid; // Проверяем собранный объект
+    return isValid; // Возвращаем результат проверки текущих ошибок
   };
   
   // Убран useEffect для валидации
@@ -196,6 +230,10 @@ const VacationForm = () => {
       toast.success('Заявка успешно отправлена руководителю');
       setStatus('submitted'); // Меняем статус в UI
 
+      // !!! ОБНОВЛЯЕМ ЛИМИТЫ ПОСЛЕ УСПЕШНОЙ ОТПРАВКИ !!!
+      console.log("Request submitted successfully. Refreshing limits...");
+      await refreshUserVacationLimits(year); // Вызываем обновление лимитов для текущего года формы
+
     } catch (error) {
       toast.error(error.message || 'Ошибка при сохранении или отправке заявки');
       // Не сбрасываем submitting в случае ошибки, чтобы пользователь мог попробовать еще раз?
@@ -224,46 +262,48 @@ const VacationForm = () => {
         </select>
         {/* Убираем индикатор загрузки лимита */}
       </div>
-      
-      <motion.div 
-        className="vacation-limits card" // Добавлен класс card
+      {/* --- Блок отображения лимитов --- */}
+      <motion.div
+        className="vacation-limits card"
         initial={{ x: -20, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="limit-item">
-          <span>Доступно дней:</span>
-          {/* Используем currentLimit */}
-          <span className="limit-value">{currentLimit}</span>
-        </div>
-        <div className="limit-item">
-          <span>Использовано:</span>
-           {/* Используем currentUsedDays */}
-          <span className="limit-value">{currentUsedDays}</span>
-        </div>
-        <div className="limit-item">
-          <span>Запрошено:</span>
-          <span className="limit-value">{totalDaysRequested}</span>
-        </div>
-        <div className="limit-item">
-          <span>Осталось:</span>
-           {/* remainingDays теперь рассчитывается на основе данных контекста */}
-          <span className={`limit-value ${remainingDays < 0 ? 'error' : ''}`}>
-            {remainingDays}
-          </span>
-        </div>
+        {limitsLoading ? (
+           <div className="loading-container"> <Loader size="small" /> Загрузка лимитов...</div>
+        ) : limitError ? (
+           <div className="error-message">{limitError}</div>
+        ) : currentLimit !== null ? (
+          <>
+            <div className="limit-item">
+              <span>Лимит на {year}:</span>
+              <span className="limit-value">{currentLimit}</span>
+            </div>
+            <div className="limit-item">
+              <span>Использовано:</span>
+              <span className="limit-value">{currentUsedDays ?? 'N/A'}</span>
+            </div>
+            <div className="limit-item">
+              <span>Доступно:</span>
+              <span className="limit-value">{currentAvailableDays ?? 'N/A'}</span>
+            </div>
+            {/* <hr /> был здесь */}
+            <div className="limit-item">
+              <span>Запрошено в этой заявке:</span>
+              <span className="limit-value">{totalDaysRequested}</span>
+            </div>
+            {/* Блок "Останется после заявки" удален полностью */}
+          </>
+        ) : (
+          <div className="info-message">Лимит отпуска на {year} год не найден или не установлен.</div>
+        )}
       </motion.div>
       
-      {/* Отображение ошибок (изменено на явные проверки) */}
-      {errors.invalidDates && <div className="error-message">{errors.invalidDates}</div>}
-      {errors.noPeriods && <div className="error-message">{errors.noPeriods}</div>}
-      {errors.noDays && <div className="error-message">{errors.noDays}</div>}
-      {/* Упрощенное отображение ошибки без анимации */}
-      {/* Убран console.log из рендера */}
-      {errors.longPeriod ? <div className="error-message">{errors.longPeriod}</div> : null} 
-      {errors.limit && <div className="error-message">{errors.limit}</div>}
-      {/* НОВОЕ: Отображение ошибки точного соответствия дней */}
-      {errors.exactDays && <div className="error-message">{errors.exactDays}</div>}
+      {/* --- Отображение ошибок валидации формы --- */}
+      {Object.values(errors).map((error, index) => (
+        error && <div key={index} className="error-message">{error}</div>
+      ))}
+      {/* Убираем явные проверки, используем map */}
       
       {/* Форма теперь вызывает handleSubmit при отправке */}
       <form onSubmit={handleSubmit}> 
@@ -366,12 +406,15 @@ const VacationForm = () => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             disabled={
-              submitting || 
-              status === 'submitted' || 
-              Object.keys(errors).length > 0 // Блокируем при ошибках валидации
-            } 
+              limitsLoading || // Блокируем во время загрузки лимитов
+              currentAvailableDays === null || // Блокируем, если лимит не загружен/не найден
+              submitting ||
+              status === 'submitted' ||
+              Object.values(errors).some(e => e) // Блокируем, если есть хотя бы одна ошибка
+            }
           >
-            <FaPaperPlane /> Отправить руководителю
+            {submitting ? <Loader size="small" inline /> : <FaPaperPlane />}
+            {submitting ? ' Отправка...' : ' Отправить руководителю'}
           </motion.button>
         </div>
       </form>

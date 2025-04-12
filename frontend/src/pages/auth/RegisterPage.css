@@ -3,18 +3,19 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 90vh;
-  background: linear-gradient(135deg, var(--background-gradient-start, #f5f7fa), var(--background-gradient-end, #c3cfe2));
+  min-height: 90vh; /* Используем 90vh, как в LoginPage.css */
+  background: var(--bg-primary); /* Используем основной фон темы */
+  /* background: linear-gradient(135deg, var(--bg-primary), var(--bg-tertiary)); - Вариант с градиентом темы */
   padding: 20px;
   overflow-y: auto; /* Allow scrolling if content overflows */
 }
 
 .auth-container {
   position: relative;
-  max-width: 420px;
+  max-width: 480px; /* Slightly wider for registration */
   width: 90%;
   /* min-height will be set by specific page styles */
-  background-color: var(--card-background-color, #ffffff);
+  background-color: var(--bg-secondary); /* Исправлено: Используем переменную темы */
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   overflow: hidden; /* Keep overflow hidden for rounded corners */
@@ -124,11 +125,12 @@
 
 /* Submit button */
 .form-container button[type="submit"] {
-    padding: 14px 25px; /* Original padding */
+    padding: 12px 20px;
     border: none;
     border-radius: 6px;
-    background: linear-gradient(135deg, var(--primary-color, #007bff), var(--primary-dark-color, #0056b3));
-    color: white;
+    /* Используем переменные акцентного цвета темы */
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+    color: white; /* Белый текст обычно хорошо читается на синем */
     font-size: 1.05em; /* Original size */
     font-weight: 600;
     cursor: pointer;
@@ -156,10 +158,10 @@
 
 /* Toggle link styling (replaces .toggle-button) */
 .toggle-link {
-  margin-top: 25px; /* Original spacing */
-  padding: 10px 15px; /* Original padding */
+  margin-top: 20px;
+  padding: 8px 12px;
   background-color: transparent;
-  color: var(--primary-color, #007bff);
+  color: var(--accent-color); /* Исправлено: Используем переменную темы */
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -171,8 +173,9 @@
 }
 
 .toggle-link:hover {
-  background-color: var(--primary-color-light-hover, rgba(0, 123, 255, 0.1));
-  color: var(--primary-dark-color, #0056b3);
+  /* background-color: var(--primary-color-light-hover, rgba(0, 123, 255, 0.1)); - Можно убрать или заменить */
+  background-color: rgba(var(--accent-color-rgb, 13, 110, 253), 0.1); /* Используем RGB для прозрачности */
+  color: var(--accent-hover); /* Исправлено: Используем переменную темы */
   text-decoration: none; /* Ensure no underline on hover */
 }
 

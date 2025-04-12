@@ -17,7 +17,8 @@ import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'; // Ис
 import Header from './components/Header/Header'; // Исправлен путь
 import Sidebar from './components/Sidebar/Sidebar'; // Исправлен путь
 import Footer from './components/Footer/Footer'; // Исправлен путь
-import Loader from './components/ui/Loader/Loader'; 
+import Loader from './components/ui/Loader/Loader';
+import { Outlet } from 'react-router-dom'; // Импортируем Outlet
 
 // Сервисы (перемещены выше)
 import { isAuthenticated, getCurrentUser, logout } from './api/auth';
@@ -38,127 +39,179 @@ const VacationCalendar = lazy(() => import('./pages/vacations/VacationCalendar')
 const UserProfilePage = lazy(() => import('./pages/profile/UserProfilePage')); // Добавляем страницу профиля
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage')); // Будет создан позже
 
+// Компонент-обертка для основного макета приложения
+const MainLayout = () => (
+  <>
+    <Header />
+    <div className="app-container">
+      <Sidebar />
+      <main className="app-content">
+        {/* Suspense нужен здесь, если дочерние компоненты тяжелые */}
+        <Suspense fallback={<Loader />}>
+           <Outlet /> {/* Здесь будут рендериться дочерние защищенные маршруты */}
+        </Suspense>
+      </main>
+    </div>
+    <Footer />
+  </>
+);
 
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true); // Состояние загрузки данных пользователя
+  const [limitsLoading, setLimitsLoading] = useState(false); // Новое состояние для загрузки лимитов
 
-  // Функция для обновления лимитов отпуска пользователя
-  const refreshUserVacationLimits = useCallback(async () => {
-    // Проверяем наличие токена, а не объекта user, который может быть старым
+  // Функция для обновления лимитов отпуска пользователя (принимает год)
+  const refreshUserVacationLimits = useCallback(async (yearToRefresh) => { // <-- Принимает год
+    // Проверяем наличие токена
     if (!isAuthenticated()) {
         console.log("Not authenticated, skipping limits refresh.");
-        return;
+        return; // Выходим, если не аутентифицирован
     }
-
-    const currentYear = new Date().getFullYear();
-    console.log(`Refreshing vacation limits for year ${currentYear}`);
+    setLimitsLoading(true); // <-- Устанавливаем флаг загрузки лимитов
+    console.log(`Refreshing vacation limits for year ${yearToRefresh}`);
     try {
-      // API getVacationLimit использует токен для идентификации пользователя
-      const limits = await getVacationLimit(currentYear); // API returns { total_days, used_days, ... }
+      // Используем переданный год
+      const limits = await getVacationLimit(yearToRefresh); // API returns { total_days, used_days, ... }
 
-      // ИСПРАВЛЕНО: Используем правильные имена полей из API
-      const total_days = limits.total_days ?? 0;
-      const used_days = limits.used_days ?? 0;
-      const availableDays = total_days - used_days; // Correct calculation
+      // Используем правильные имена полей из API
+      const total_days = limits.total_days ?? null; // <-- Используем null как индикатор отсутствия данных
+      const used_days = limits.used_days ?? null;
 
-      // Логирование с правильными именами
-      console.log(`Fetched limits: total_days=${total_days}, used_days=${used_days}, Available=${availableDays}`);
+      // !!! ДОБАВЛЕНО ЛОГИРОВАНИЕ СЫРОГО ОТВЕТА API !!!
+      console.log(`>>> Raw API response for getVacationLimit(${yearToRefresh}):`, JSON.stringify(limits));
+
+      // Рассчитываем доступные дни только если total_days не null
+      const availableDays = total_days !== null && used_days !== null ? total_days - used_days : null;
+
+      // Логирование обработанных значений
+      console.log(`Fetched limits for ${yearToRefresh}: total_days=${total_days}, used_days=${used_days}, Available=${availableDays}`);
+
 
       // Используем функциональную форму setUser, чтобы не зависеть от 'user'
       setUser(prevUser => {
-        // Если по какой-то причине предыдущего пользователя нет, но мы аутентифицированы,
-        // возможно, стоит вернуть null или базовый объект, но пока просто проверим.
         if (!prevUser) {
-            console.log("setUser in refresh: prevUser is null, returning null.");
+            console.warn("setUser in refresh: prevUser is null, but authenticated. Setting partial user data.");
+             // Возможно, создать базовый объект пользователя, если он должен быть?
+             // Или просто не обновлять, если prevUser null. Пока не обновляем.
             return null;
         }
+        const updatedLimits = {
+           ...(prevUser.vacationLimits || {}),
+           [yearToRefresh]: { // <-- Используем переданный год как ключ
+               totalDays: total_days, // Сохраняем как camelCase
+               usedDays: used_days,   // Сохраняем как camelCase
+               availableDays: availableDays,
+               // Добавим флаг, что данные были загружены (даже если они null)
+               loaded: true
+           }
+        };
         const updatedUser = {
           ...prevUser,
-          vacationLimits: { // Добавляем или обновляем объект с лимитами
-            ...(prevUser.vacationLimits || {}), // Сохраняем другие года, если они есть
-            [currentYear]: {
-              // ИСПРАВЛЕНО: Сохраняем с правильными именами, но можно и с camelCase, если консистентно
-              totalDays: total_days, // Сохраним как camelCase в стейте для удобства
-              usedDays: used_days,   // Сохраним как camelCase в стейте для удобства
-              availableDays: availableDays,
-            }
-          },
-          // Обновляем поля верхнего уровня (camelCase)
-          currentAvailableDays: availableDays,
-          currentTotalDays: total_days,
-          currentUsedDays: used_days,
+          vacationLimits: updatedLimits,
         };
-        console.log("Updating user state with new limits:", updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+
+        // Опционально: Обновлять поля верхнего уровня только если обновляется текущий год
+        const currentSystemYear = new Date().getFullYear();
+        if (yearToRefresh === currentSystemYear) {
+            updatedUser.currentAvailableDays = availableDays;
+            updatedUser.currentTotalDays = total_days;
+            updatedUser.currentUsedDays = used_days;
+        }
+
+        console.log(`Updating user state with limits for year ${yearToRefresh}:`, updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser)); // Сохраняем обновленного пользователя
         return updatedUser;
       });
+
     } catch (error) {
-      console.error("Failed to refresh vacation limits:", error);
-      // Возможно, стоит разлогинить пользователя, если запрос лимитов критичен или вернул 401/403
-      if (error.response?.status === 401 || error.response?.status === 403) {
-          logout();
-          setUser(null); // Сбрасываем пользователя в стейте
-      }
+        console.error(`Failed to refresh vacation limits for year ${yearToRefresh}:`, error);
+        // Сохраняем информацию об ошибке в состоянии пользователя для данного года
+        setUser(prevUser => {
+          if (!prevUser) return null;
+          const updatedLimits = {
+             ...(prevUser.vacationLimits || {}),
+             [yearToRefresh]: {
+                 loaded: true, // Отмечаем, что попытка загрузки была
+                 error: error.message || 'Не удалось загрузить лимит' // Сохраняем текст ошибки
+             }
+          };
+           const updatedUser = { ...prevUser, vacationLimits: updatedLimits };
+           localStorage.setItem('user', JSON.stringify(updatedUser));
+           return updatedUser;
+        });
+        // Разлогиниваем только при 401/403
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            logout();
+            setUser(null);
+        }
+    } finally {
+         setLimitsLoading(false); // <-- Сбрасываем флаг загрузки лимитов
     }
-  }, []); // <-- УБРАЛИ 'user' из зависимостей
+  }, []); // <-- Зависимостей нет, функция стабильна
 
   // Основной useEffect для загрузки пользователя
-   useEffect(() => {
-    let isMounted = true; // Флаг для предотвращения обновления состояния в размонтированном компоненте
+  useEffect(() => {
+    let isMounted = true;
     const fetchUser = async () => {
-        if (!isMounted) return; // Прерываем, если компонент размонтирован
+        if (!isMounted) return;
         setLoading(true);
         if (isAuthenticated()) {
             const storedUserString = localStorage.getItem('user');
+            let userToSet = null; // Временная переменная для пользователя
             if (storedUserString) {
                 try {
-                    const storedUser = JSON.parse(storedUserString);
-                    if (isMounted) {
-                        setUser(storedUser);
-                        // Вызываем обновление лимитов ПОСЛЕ установки пользователя.
-                        // refreshUserVacationLimits теперь стабильна (нет зависимостей).
-                        await refreshUserVacationLimits(); // Убрали setTimeout, вызываем напрямую
-                    }
+                    userToSet = JSON.parse(storedUserString);
                 } catch (parseError) {
                     console.error("Error parsing user from localStorage:", parseError);
-                    logout(); // Разлогиниваем при ошибке парсинга
-                    if (isMounted) setUser(null);
+                    logout();
                 }
             } else if (localStorage.getItem('token')) {
-                 // Есть токен, но нет пользователя в localStorage - некорректное состояние
-                 console.log("Token exists, but no user data in localStorage. Logging out.");
+                 console.warn("Token exists, but no user data in localStorage. Logging out.");
                  logout();
-                 if (isMounted) setUser(null);
-            } else {
-                 // Нет токена и нет пользователя в localStorage (не залогинен)
-                 if (isMounted) setUser(null);
             }
+
+            if (isMounted) {
+                setUser(userToSet); // Устанавливаем пользователя (может быть null)
+
+                // Если пользователь успешно загружен/установлен, обновляем лимиты для ТЕКУЩЕГО года
+                if (userToSet) {
+                    const currentSystemYear = new Date().getFullYear();
+                    // Проверяем, были ли лимиты для текущего года уже загружены (из localStorage)
+                    if (!userToSet.vacationLimits?.[currentSystemYear]?.loaded) {
+                         await refreshUserVacationLimits(currentSystemYear);
+                    } else {
+                         console.log(`Limits for year ${currentSystemYear} already loaded.`);
+                    }
+                }
+                setLoading(false);
+            }
+
         } else {
-             // Не аутентифицирован (нет токена)
-             if (isMounted) setUser(null);
-        }
-        if (isMounted) {
-             setLoading(false);
+             // Не аутентифицирован
+             if (isMounted) {
+                 setUser(null);
+                 setLoading(false);
+             }
         }
     };
-
     fetchUser();
 
-    return () => {
-      isMounted = false; // Устанавливаем флаг при размонтировании
-    };
-    // Зависимость от refreshUserVacationLimits остается, но функция теперь стабильна
-  }, [refreshUserVacationLimits]);
-  // Отображение глобального загрузчика во время проверки аутентификации
+
+    return () => { isMounted = false; };
+  }, [refreshUserVacationLimits]); // Зависимость остается, но функция стабильна
+
+  // Отображение глобального загрузчика
+  // ИСПРАВЛЕНО: Используем loading И limitsLoading для более точного отображения
+  // Но пока оставим только loading для первоначальной загрузки
   if (loading) {
-    return <Loader />; // Отображаем лоадер на весь экран
+    return <Loader />;
   }
 
   return (
     <ThemeProvider>
-      {/* Передаем user, setUser и refreshUserVacationLimits */}
-      <UserProvider value={{ user, setUser, refreshUserVacationLimits }}>
+      {/* Передаем user, setUser, refreshUserVacationLimits и limitsLoading */}
+      <UserProvider value={{ user, setUser, refreshUserVacationLimits, limitsLoading }}>
         <Router>
           <div className="app">
             <ToastContainer
@@ -173,77 +226,72 @@ const App = () => {
               pauseOnHover
               theme="colored" // Используем цветные уведомления
             />
-
-            {/* Отображаем Header и Sidebar только если пользователь аутентифицирован */}
-            {isAuthenticated() && user && <Header />} 
             
-            <div className="app-container">
-              {isAuthenticated() && user && <Sidebar />}
-              
-              <main className="app-content">
-                {/* Suspense для обработки ленивой загрузки компонентов */}
-                <Suspense fallback={<Loader />}> 
-                  <AnimatePresence mode="wait">
-                    <Routes>
-                      {/* Общедоступные маршруты */}
-                      {/* Auth Routes */}
-                      <Route
-                        path="/login"
-                        // Если пользователь аутентифицирован, перенаправляем на профиль (или дашборд)
-                        element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <LoginPage />}
-                      />
-                      <Route
-                        path="/register"
-                         // Если пользователь аутентифицирован, перенаправляем на профиль (или дашборд)
-                        element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <RegisterPage />}
-                      />
+            {/* Suspense для обработки ленивой загрузки страниц */}
+            <Suspense fallback={<Loader />}>
+               <AnimatePresence mode="wait">
+                  <Routes>
+                    {/* Auth Routes (вне MainLayout) */}
+                    <Route
+                      path="/login"
+                      element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <LoginPage />}
+                    />
+                    <Route
+                      path="/register"
+                      element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <RegisterPage />}
+                    />
 
-                       {/* Protected Routes */}
-                      <Route element={<ProtectedRoute />}>
-                        {/* Перенаправление с главной на дашборд */}
-                        <Route 
-                          path="/" 
-                          element={
-                            <Navigate
-                              to={user ? "/dashboard" : "/login"} // Всегда на /dashboard если залогинен
-                              replace
-                            />
-                          } 
-                        />
+                    {/* Protected Routes (внутри MainLayout) */}
+                    {/* Обертка ProtectedRoute проверяет аутентификацию */}
+                    <Route element={<ProtectedRoute />}>
+                      {/* MainLayout применяется ко всем вложенным маршрутам */}
+                      <Route element={<MainLayout />}>
+                         {/* Перенаправление с главной на дашборд */}
+                         <Route 
+                           path="/" 
+                           element={
+                             <Navigate
+                               to="/dashboard" // Всегда на /dashboard если залогинен и прошел ProtectedRoute
+                               replace
+                             />
+                           } 
+                         />
+                         {/* Остальные защищенные маршруты */}
+                         <Route path="/dashboard" element={<UniversalDashboard />} />
+                         <Route path="/vacations/new" element={<VacationForm />} />
+                         <Route path="/vacations/list" element={<VacationsList />} />
+                         <Route path="/vacations/calendar" element={<VacationCalendar />} />
+                         <Route path="/profile" element={<UserProfilePage />} />
+                         {/* Маршруты для всех аутентифицированных пользователей */}
+                         <Route path="/dashboard" element={<UniversalDashboard />} />
+                         <Route path="/vacations/new" element={<VacationForm />} />
+                         <Route path="/vacations/list" element={<VacationsList />} />
+                         <Route path="/vacations/calendar" element={<VacationCalendar />} />
+                         <Route path="/profile" element={<UserProfilePage />} />
 
-                        {/* Маршруты для всех аутентифицированных пользователей */}
-                        <Route path="/dashboard" element={<UniversalDashboard />} /> {/* Добавляем маршрут для универсального дашборда */}
-                        <Route path="/vacations/new" element={<VacationForm />} />
-                        <Route path="/vacations/list" element={<VacationsList />} />
-                        <Route path="/vacations/calendar" element={<VacationCalendar />} />
-                        <Route path="/profile" element={<UserProfilePage />} /> {/* Добавляем маршрут для профиля */}
-                        
-                        {/* Маршруты для руководителей (дополнительная проверка роли) */}
-                        <Route
-                          path="/manager/dashboard"
-                          element={ // Проверяем роль менеджера
-                            user?.role === 'manager' ? <ManagerDashboard /> : <Navigate to="/profile" replace />
-                          }
-                        />
+                         {/* Маршруты для руководителей (дополнительная проверка роли) */}
+                         <Route
+                           path="/manager/dashboard"
+                           element={
+                             user?.role === 'manager' ? <ManagerDashboard /> : <Navigate to="/dashboard" replace />
+                           }
+                         />
 
-                        {/* Маршруты для администраторов (дополнительная проверка роли) */}
-                        <Route
-                          path="/admin/dashboard"
-                          element={ // ИЗМЕНЕНО: Проверяем isAdmin вместо role
-                            user?.isAdmin ? <AdminDashboard /> : <Navigate to="/profile" replace /> 
-                          }
-                        />
-                      </Route>
+                         {/* Маршруты для администраторов (дополнительная проверка роли) */}
+                         <Route
+                           path="/admin/dashboard"
+                           element={
+                             user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" replace />
+                           }
+                         />
+                      </Route> {/* Конец MainLayout */}
+                    </Route> {/* Конец ProtectedRoute */}
                       
-                      {/* Маршрут для страницы 404 */}
-                      <Route path="*" element={<NotFoundPage />} />
-                    </Routes>
-                  </AnimatePresence>
-                </Suspense>
-              </main>
-            </div>
-            
-            {isAuthenticated() && user && <Footer />}
+                    {/* Маршрут 404 (вне MainLayout, но можно и внутри, если нужен хедер/футер) */}
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+               </AnimatePresence>
+             </Suspense>
           </div>
         </Router>
       </UserProvider>
