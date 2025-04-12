@@ -102,13 +102,19 @@ const VacationCalendar = () => {
        <div className="controls" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
          <label htmlFor="calendar-year">Год:</label>
          <select 
-            id="calendar-year" 
-            value={year} 
-            onChange={(e) => setYear(parseInt(e.target.value))}
+            id="calendar-year"
+            value={year}
+            onChange={(e) => {
+              const newYear = parseInt(e.target.value);
+              setYear(newYear);
+              // Устанавливаем дату календаря на 1 января выбранного года
+              setCalendarDate(new Date(newYear, 0, 1)); 
+            }}
             disabled={loading}
           >
-            {[...Array(5)].map((_, i) => {
-              const y = new Date().getFullYear() + 2 - i;
+            {[...Array(6)].map((_, i) => { // Генерируем 6 лет: текущий + 5 следующих
+              const currentYear = new Date().getFullYear();
+              const y = currentYear + i; // Начинаем с текущего года и добавляем смещение
               return <option key={y} value={y}>{y}</option>;
             })}
           </select>
