@@ -193,10 +193,11 @@ type Intersection struct {
 
 // UserWithLimitDTO represents user data along with their vacation limit for a specific year.
 type UserWithLimitDTO struct {
-	ID                int    `json:"id"`
-	FullName          string `json:"full_name"`
-	Email             string `json:"email"`
-	VacationLimitDays *int   `json:"vacation_limit_days"` // Pointer to handle null/absence of limit
+	ID                int     `json:"id"`
+	FullName          string  `json:"full_name"`
+	Email             string  `json:"email"`               // Оставляем email, вдруг понадобится
+	Position          *string `json:"position,omitempty"`  // Добавлено поле для должности (указатель для NULL)
+	VacationLimitDays *int    `json:"vacation_limit_days"` // Pointer to handle null/absence of limit
 }
 
 // --- New DTO for Admin/Manager View ---
