@@ -1,35 +1,54 @@
-import React, { useState, useEffect, useContext, useRef } from 'react'; // Добавлен useRef
-import { UserContext } from '../../context/UserContext';
-import { updateUserProfile } from '../../api/users'; // Предполагаем, что функция API создана
+import React, { useState, useEffect, useRef } from 'react'; // Убран useContext
+// import { UserContext } from '../../context/UserContext'; // Больше не нужен
+import { updateUserProfile, getMyProfile } from '../../api/users'; // Добавлен getMyProfile
 // import { getPositions } from '../../api/positions'; // TODO: Если нужно будет редактировать должность
 import './UserProfilePage.css';
 import Loader from '../../components/ui/Loader/Loader';
 
 function UserProfilePage() {
-  const { user: currentUser, setUser } = useContext(UserContext); // Получаем текущего пользователя и функцию для его обновления
+  // Убрано использование UserContext, данные профиля загружаются отдельно
+  const [profileData, setProfileData] = useState(null); // Состояние для данных профиля
+  const [isProfileLoading, setIsProfileLoading] = useState(true); // Состояние загрузки профиля
   const [formData, setFormData] = useState({
     full_name: '',
     password: '',
     confirmPassword: '',
     // position_id: '', // Пока не редактируем должность для себя
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false); // Переименовано isLoading в isFormLoading
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const successTimeoutRef = useRef(null); // Ref для хранения ID тайм-аута
   // const [positions, setPositions] = useState([]); // TODO: Если нужно будет редактировать должность
 
-  // Заполняем форму данными текущего пользователя при загрузке и очищаем тайм-аут при размонтировании
+  // Загрузка данных профиля при монтировании компонента
   useEffect(() => {
-    if (currentUser) {
-      setFormData((prevData) => ({
-        ...prevData,
-        // Используем fullName (после исправления transformUserKeys)
-        full_name: currentUser.fullName || '',
-        // position_id: currentUser.position_id || '', // Пока не редактируем
-      }));
-    }
-    // TODO: Загрузить список должностей, если нужно
+    const fetchProfile = async () => {
+      setIsProfileLoading(true);
+      setError('');
+      try {
+        const data = await getMyProfile();
+        setProfileData(data);
+        // Заполняем форму данными из профиля
+        setFormData((prevData) => ({
+          ...prevData,
+          full_name: data.full_name || '',
+          // Очищаем поля пароля при загрузке
+          password: '',
+          confirmPassword: '',
+          // position_id: data.position_id || '', // Пока не редактируем
+        }));
+      } catch (err) {
+        setError(err.message || 'Не удалось загрузить профиль');
+        console.error("Ошибка загрузки профиля:", err);
+      } finally {
+        setIsProfileLoading(false);
+      }
+    };
+
+    fetchProfile();
+
+    // TODO: Загрузить список должностей, если нужно (остается)
     // const fetchPositions = async () => {
     //   try {
     //     const data = await getPositions();
@@ -42,11 +61,11 @@ function UserProfilePage() {
 
     // Очистка тайм-аута при размонтировании компонента
     return () => {
-        if (successTimeoutRef.current) {
-            clearTimeout(successTimeoutRef.current);
-        }
+      if (successTimeoutRef.current) {
+          clearTimeout(successTimeoutRef.current);
+      }
     };
-  }, [currentUser]);
+  }, []); // Пустой массив зависимостей, чтобы выполнилось один раз при монтировании
 
 
   const handleChange = (e) => {
@@ -74,11 +93,11 @@ function UserProfilePage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsFormLoading(true); // Используем isFormLoading
 
     const updateData = {};
-    // Используем fullName
-    if (formData.full_name && formData.full_name !== currentUser.fullName) {
+    // Используем fullName из profileData
+    if (formData.full_name && formData.full_name !== profileData.full_name) {
       updateData.full_name = formData.full_name;
     }
     if (formData.password) {
@@ -91,14 +110,16 @@ function UserProfilePage() {
     //   }
     // }
 
+    // Проверяем, есть ли изменения
     if (Object.keys(updateData).length === 0) {
       setError('Нет изменений для сохранения.');
-      setIsLoading(false);
+      setIsFormLoading(false); // <-- Заменяем на setIsFormLoading
       return;
     }
 
     try {
-      const response = await updateUserProfile(currentUser.id, updateData);
+      // Используем ID из profileData
+      const response = await updateUserProfile(profileData.id, updateData);
       const message = response.message || 'Профиль успешно обновлен!';
       setSuccessMessage(message);
 
@@ -112,54 +133,85 @@ function UserProfilePage() {
       }, 3000);
 
 
-      // Очищаем поля пароля после успешного обновления
+      // Обновляем только поле full_name в formData, пароли очищаются
       setFormData((prevData) => ({
         ...prevData,
-        password: '',
-        confirmPassword: '',
+        password: '', // Очищаем пароль
+        confirmPassword: '', // Очищаем подтверждение
       }));
 
-      // Обновляем данные пользователя в контексте, если ФИО изменилось
+      // Обновляем данные в локальном состоянии profileData
       if (updateData.full_name) {
-          // Создаем новый объект пользователя с обновленным именем
-          // Используем fullName
-          const updatedUser = { ...currentUser, fullName: updateData.full_name };
-          // Обновляем контекст
-          setUser(updatedUser);
+          setProfileData(prevProfile => ({
+              ...prevProfile,
+              full_name: updateData.full_name,
+              updated_at: new Date().toISOString(), // Обновляем время обновления (приблизительно)
+          }));
           // Обновляем localStorage (если используется для хранения данных пользователя)
-          localStorage.setItem('user', JSON.stringify(updatedUser));
+          // Важно: сохраняем ПОЛНЫЙ объект профиля, а не только user из старого контекста
+          try {
+            const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+            const updatedStoredUser = { ...storedUser, fullName: updateData.full_name };
+            localStorage.setItem('user', JSON.stringify(updatedStoredUser));
+             // Можно также обновить UserContext глобально, если он используется где-то еще,
+             // но для этой страницы достаточно локального обновления profileData
+             // const { setUser } = useContext(UserContext); // Потребуется снова импортировать useContext и UserContext
+             // setUser(updatedStoredUser); // Если UserContext все еще нужен глобально
+          } catch (e) {
+            console.error("Ошибка обновления localStorage:", e);
+          }
       }
 
 
     } catch (err) {
       setError(err.message || 'Произошла ошибка при обновлении профиля.');
     } finally {
-      setIsLoading(false);
+      setIsFormLoading(false); // Используем isFormLoading
     }
   };
 
-  if (!currentUser) {
-    return <Loader />; // Показываем загрузчик, пока данные пользователя не загружены
+  // Показываем загрузчик, пока профиль грузится
+  if (isProfileLoading) {
+    return <Loader />;
+  }
+
+  // Показываем ошибку, если профиль не загрузился
+  if (error && !profileData) {
+      return <div className="error-message">{error}</div>;
+  }
+
+  // Если профиль не загружен (маловероятно после isProfileLoading), показываем сообщение
+  if (!profileData) {
+     return <p>Не удалось загрузить данные профиля.</p>;
   }
 
   return (
     <div className="profile-page">
       <h2>Профиль пользователя</h2>
       <div className="profile-info">
-        {/* Заменено "Имя пользователя" на "ФИО" и отображается fullName */}
-        <p><strong>ФИО:</strong> {currentUser.fullName || currentUser.username}</p> {/* Отображаем ФИО, username как запасной вариант */}
-        {/* Email убран по запросу */}
-        {/* TODO: Отобразить название отдела, если оно будет добавлено */}
-        {/* <p><strong>Отдел:</strong> {currentUser.department_name || 'Не указан'}</p> */}
+        {/* Отображаем данные из profileData */}
+        <p><strong>ФИО:</strong> {profileData.full_name || 'Не указано'}</p>
+        <p><strong>Логин:</strong> {profileData.login}</p>
+        <p><strong>Email:</strong> {profileData.email}</p>
+        {/* Отображаем иерархию юнитов */}
+        {profileData.department && <p><strong>Департамент:</strong> {profileData.department}</p>}
+        {profileData.subDepartment && <p><strong>Подотдел:</strong> {profileData.subDepartment}</p>}
+        {profileData.sector && <p><strong>Сектор:</strong> {profileData.sector}</p>}
         <p>
             <strong>Должность:</strong>{' '}
-            <span className={`user-position-badge ${getPositionLevelClass(currentUser.positionName)}`}>
-                {currentUser.positionName || 'Не указана'}
+            <span className={`user-position-badge ${getPositionLevelClass(profileData.positionName)}`}>
+                {profileData.positionName || 'Не указана'}
             </span>
         </p>
-        <p><strong>Дата создания:</strong> {new Date(currentUser.created_at).toLocaleString()}</p>
-        <p><strong>Дата обновления:</strong> {new Date(currentUser.updated_at).toLocaleString()}</p>
-        {/* Роли убраны, отображается должность */}
+        <p><strong>Дата создания:</strong> {new Date(profileData.created_at).toLocaleString()}</p>
+        <p><strong>Дата обновления:</strong> {new Date(profileData.updated_at).toLocaleString()}</p>
+        {/* Отображение ролей, если нужно */}
+        {(profileData.is_admin || profileData.is_manager) && (
+            <p><strong>Роли:</strong>
+                {profileData.is_admin && <span className="role-badge admin-badge">Администратор</span>}
+                {profileData.is_manager && <span className="role-badge manager-badge">Руководитель</span>}
+            </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="profile-form">
@@ -231,19 +283,18 @@ function UserProfilePage() {
 
         {/* Вычисляем, были ли изменения */}
         {(() => {
-           // Убедимся, что currentUser существует перед доступом к его свойствам
-           // Используем fullName
-           const originalFullName = currentUser?.fullName || '';
+           // Используем profileData для сравнения
+           const originalFullName = profileData?.full_name || '';
            const hasNameChanged = formData.full_name !== originalFullName;
            const hasPasswordChanged = !!formData.password;
            // TODO: Добавить проверку изменения должности, если она будет добавлена
-           // const originalPositionId = currentUser?.position_id || '';
+           // const originalPositionId = profileData?.position_id || '';
            // const hasPositionChanged = formData.position_id !== originalPositionId;
            const hasChanges = hasNameChanged || hasPasswordChanged; // || hasPositionChanged;
 
            return (
-              <button type="submit" className="save-button" disabled={isLoading || !hasChanges}>
-                {isLoading ? <Loader size="small" /> : 'Сохранить изменения'}
+              <button type="submit" className="save-button" disabled={isFormLoading || !hasChanges}>
+                {isFormLoading ? <Loader size="small" /> : 'Сохранить изменения'}
               </button>
            );
         })()}

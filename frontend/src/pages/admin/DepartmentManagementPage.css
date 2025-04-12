@@ -1,0 +1,159 @@
+.department-management-page {
+  padding: 20px;
+  background-color: var(--background-color); /* Используем переменные темы */
+  color: var(--text-color);
+  max-width: 900px;
+  margin: 20px auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.department-management-page h1 {
+  color: var(--primary-color);
+  margin-bottom: 25px;
+  border-bottom: 2px solid var(--secondary-color);
+  padding-bottom: 10px;
+}
+
+/* Стили для хлебных крошек */
+.breadcrumbs {
+  list-style: none;
+  padding: 0 0 20px 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap; /* Перенос на новую строку при необходимости */
+  align-items: center;
+  font-size: 0.95em;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.breadcrumb-item {
+  display: inline-flex; /* Чтобы элементы были в строку */
+  align-items: center;
+}
+
+.breadcrumb-item::after {
+  content: '/';
+  margin: 0 8px;
+  color: var(--secondary-text-color);
+}
+
+.breadcrumb-item:last-child::after {
+  content: ''; /* Убираем слэш у последнего элемента */
+  margin: 0;
+}
+
+.breadcrumb-link {
+  background: none;
+  border: none;
+  color: var(--link-color);
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit; /* Наследуем размер шрифта */
+}
+
+.breadcrumb-link:hover {
+  text-decoration: underline;
+  color: var(--link-hover-color);
+}
+
+.breadcrumb-item.active span {
+  color: var(--text-color);
+  font-weight: bold;
+}
+
+/* Стили для списка */
+.items-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  margin-bottom: 10px;
+  background-color: var(--card-bg-color); /* Фон плитки */
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+.list-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.item-info {
+  flex-grow: 1;
+  margin-right: 15px;
+}
+
+.item-info strong {
+  font-size: 1.1em;
+}
+
+.item-actions button {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  margin-left: 10px; /* Небольшой отступ между кнопками, если их будет несколько */
+}
+
+.navigate-button {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.navigate-button:hover {
+  background-color: var(--primary-hover-color);
+  transform: translateY(-1px);
+}
+
+.manage-button {
+  background-color: var(--secondary-color);
+  color: white;
+}
+
+.manage-button:hover {
+  background-color: var(--secondary-hover-color);
+  transform: translateY(-1px);
+}
+
+.error-message {
+  color: var(--error-color);
+  background-color: var(--error-bg-color);
+  padding: 10px 15px;
+  border-radius: 4px;
+  border: 1px solid var(--error-color);
+}
+
+/* Адаптивность (пример) */
+@media (max-width: 600px) {
+  .list-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .item-actions {
+    margin-top: 10px;
+    width: 100%;
+    display: flex;
+  }
+
+  .item-actions button {
+    flex-grow: 1; /* Кнопки занимают всю ширину */
+    margin-left: 0;
+    margin-top: 5px;
+  }
+
+  .item-actions button:first-child {
+     margin-top: 0;
+  }
+}

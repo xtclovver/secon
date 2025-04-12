@@ -112,7 +112,7 @@ const VacationCalendar = () => {
             }}
             disabled={loading}
           >
-            {[...Array(6)].map((_, i) => { // Генерируем 6 лет: текущий + 5 следующих
+            {[...Array(4)].map((_, i) => { // Генерируем 4 года: текущий + 3 следующих
               const currentYear = new Date().getFullYear();
               const y = currentYear + i; // Начинаем с текущего года и добавляем смещение
               return <option key={y} value={y}>{y}</option>;

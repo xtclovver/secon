@@ -171,12 +171,15 @@ const VacationForm = () => {
             if (totalRequested !== currentAvailableDays && totalRequested > 0) {
                 currentErrors.exactDays = `Необходимо использовать все доступные дни отпуска (${currentAvailableDays} дн.). Запрошено: ${totalRequested} дн.`;
             }
-        } else if (limitsData?.loaded && !limitError) {
-             // Лимиты загружены, но равны null (возможно, не установлены для пользователя)
-             currentErrors.limitNotSet = 'Лимит отпуска на выбранный год не установлен. Обратитесь к администратору.';
+        } else if (limitsData?.loaded && !limitError && currentLimit === null) { // Явно проверяем, что лимит null после загрузки
+             // Лимит был запрошен, но не найден в БД
+             currentErrors.limitNotSet = `Лимит отпуска на ${year} год не найден в системе. Пожалуйста, обратитесь к администратору для установки лимита.`;
+        } else if (limitError) {
+             // Если была ошибка при загрузке лимита
+             currentErrors.limitLoadError = `Ошибка при загрузке лимита на ${year} год: ${limitError}`;
         } else if (!limitsData?.loaded && !limitsLoading) {
-             // Данные еще не загружены (но и не грузятся) - странная ситуация, но добавим проверку
-             currentErrors.limitNotLoaded = 'Данные о лимите отпуска еще не загружены.';
+             // Данные еще не загружены и не в процессе загрузки
+             currentErrors.limitNotLoaded = 'Ожидание данных о лимите отпуска...';
         }
         // Если есть ошибка limitError, она будет показана в блоке лимитов, здесь можно не дублировать
     }
@@ -274,8 +277,11 @@ const VacationForm = () => {
       <div className="year-selector">
         {/* Убираем disabled={loading} */}
         <select id="year" value={year} onChange={handleYearChange} disabled={submitting}>
-          <option value={new Date().getFullYear()}>Текущий год</option>
-          <option value={new Date().getFullYear() + 1}>Следующий год</option>
+          {[...Array(4)].map((_, i) => { // Генерируем 4 года: текущий + 3 следующих
+            const currentYear = new Date().getFullYear();
+            const y = currentYear + i; // Начинаем с текущего года и добавляем смещение
+            return <option key={y} value={y}>{y}</option>;
+          })}
         </select>
         {/* Убираем индикатор загрузки лимита */}
       </div>

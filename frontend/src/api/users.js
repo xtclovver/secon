@@ -76,6 +76,21 @@ export const updateUserProfile = async (userId, updateData) => {
   }
 };
 
+/**
+ * Получает данные профиля текущего аутентифицированного пользователя.
+ * Включает иерархию организационных юнитов (Department, SubDepartment, Sector).
+ * @returns {Promise<object>} - Промис, который разрешается объектом UserProfileDTO.
+ */
+export const getMyProfile = async () => {
+  try {
+    const response = await apiClient.get('/profile'); // Вызываем новый эндпоинт
+    return response.data; // Возвращаем UserProfileDTO
+  } catch (error) {
+    console.error('Ошибка при получении профиля пользователя:', error.response || error.message);
+    throw new Error(error.response?.data?.error || 'Не удалось получить профиль пользователя');
+  }
+};
+
 
 // Можно добавить другие функции для работы с пользователями (CRUD и т.д.)
 // export const createUser = async (userData) => { ... };

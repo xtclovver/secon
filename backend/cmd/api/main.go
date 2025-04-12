@@ -31,19 +31,21 @@ func main() {
 	// Создание репозиториев
 	userRepo := repositories.NewUserRepository(db)
 	vacationRepo := repositories.NewVacationRepository(db)
+	unitRepo := repositories.NewOrganizationalUnitRepository(db) // Добавлен репозиторий юнитов
 
 	// Создание сервисов
 	// Передаем оба репозитория в NewAuthService
 	authService := services.NewAuthService(userRepo, vacationRepo, cfg.JWT.Secret)
-	// Передаем оба репозитория в NewVacationService
-	vacationService := services.NewVacationService(vacationRepo, userRepo)
+	// Передаем все три репозитория в NewVacationService
+	vacationService := services.NewVacationService(vacationRepo, userRepo, unitRepo) // Добавлен unitRepo
 	// Создаем UserService
 	userService := services.NewUserService(userRepo)
+	unitService := services.NewOrganizationalUnitService(unitRepo, userRepo) // Добавлен сервис юнитов
 
 	// Создание обработчиков
 	authHandler := handlers.NewAuthHandler(authService)
-	// Создаем AppHandler вместо VacationHandler и передаем оба сервиса
-	appHandler := handlers.NewAppHandler(vacationService, userService)
+	// Создаем AppHandler и передаем все три сервиса
+	appHandler := handlers.NewAppHandler(vacationService, userService, unitService) // Добавлен unitService
 
 	// Настройка маршрутизатора Gin
 	router := gin.Default()
@@ -62,8 +64,10 @@ func main() {
 
 	// Публичные маршруты
 	router.POST("/api/auth/login", authHandler.Login)
-	router.POST("/api/auth/register", authHandler.Register) // Новый маршрут для регистрации
-	router.GET("/api/positions", appHandler.GetPositions)   // Новый маршрут для получения должностей (публичный?)
+	router.POST("/api/auth/register", authHandler.Register)              // Новый маршрут для регистрации
+	router.GET("/api/units/tree", appHandler.GetOrganizationalUnitTree)  // ПУБЛИЧНЫЙ маршрут для дерева юнитов
+	router.GET("/api/positions", appHandler.GetPositions)                // ПУБЛИЧНЫЙ маршрут для должностей
+	router.GET("/api/units/children", appHandler.GetUnitChildrenHandler) // ПУБЛИЧНЫЙ маршрут для получения дочерних элементов
 
 	// Защищенные маршруты
 	api := router.Group("/api")
@@ -83,7 +87,7 @@ func main() {
 			vacationsMgmt.Use(middleware.ManagerOrAdminOnly()) // Доступ только для менеджеров или админов
 			{
 				vacationsMgmt.GET("/all", appHandler.GetAllVacations)                          // Получение всех заявок (с фильтрами)
-				vacationsMgmt.GET("/department/:id", appHandler.GetDepartmentVacations)        // Менеджер может получить заявки своего отдела (ID отдела игнорируется для менеджера)
+				vacationsMgmt.GET("/unit/:id", appHandler.GetOrganizationalUnitVacations)      // Маршрут обновлен: /department/:id -> /unit/:id, обработчик изменен
 				vacationsMgmt.GET("/intersections", appHandler.GetVacationIntersections)       // Проверка пересечений (доступна менеджерам)
 				vacationsMgmt.POST("/requests/:id/approve", appHandler.ApproveVacationRequest) // Утверждение заявки
 				vacationsMgmt.POST("/requests/:id/reject", appHandler.RejectVacationRequest)   // Отклонение заявки
@@ -96,13 +100,24 @@ func main() {
 		{
 			// Маршруты для управления лимитами отпусков
 			admin.POST("/vacation-limits", appHandler.SetVacationLimit)
-			// Маршрут для получения пользователей с лимитами
-			admin.GET("/users", appHandler.GetAllUsersWithLimits)
-			// TODO: Добавить другие админские маршруты (управление пользователями, отделами и т.д.)
+			admin.GET("/users", appHandler.GetAllUsersWithLimits) // Получение пользователей с лимитами
+
+			// Маршруты для управления организационной структурой
+			units := admin.Group("/units")
+			{
+				units.POST("", appHandler.CreateOrganizationalUnit) // Создать юнит
+				// units.GET("/tree", appHandler.GetOrganizationalUnitTree)  // ПЕРЕМЕЩЕНО В ПУБЛИЧНУЮ СЕКЦИЮ
+				units.GET("/:id", appHandler.GetOrganizationalUnitByID)   // Получить юнит по ID (остается админским)
+				units.PUT("/:id", appHandler.UpdateOrganizationalUnit)    // Обновить юнит
+				units.DELETE("/:id", appHandler.DeleteOrganizationalUnit) // Удалить юнит
+			}
+			// TODO: Добавить другие админские маршруты (управление пользователями и т.д.)
 		}
 
 		// Маршрут для обновления профиля пользователя (доступен всем аутентифицированным, права проверяются в обработчике)
 		api.PUT("/users/:id", appHandler.UpdateUserProfile)
+		// Маршрут для получения профиля текущего пользователя
+		api.GET("/profile", appHandler.GetMyProfile) // Добавлен новый маршрут
 	}
 
 	// Запуск сервера
