@@ -287,17 +287,12 @@ const VacationForm = () => {
               <span>Доступно:</span>
               <span className="limit-value">{currentAvailableDays ?? 'N/A'}</span>
             </div>
-             <hr /> {/* Разделитель */}
+            {/* <hr /> был здесь */}
             <div className="limit-item">
               <span>Запрошено в этой заявке:</span>
               <span className="limit-value">{totalDaysRequested}</span>
             </div>
-            <div className="limit-item">
-              <span>Останется после заявки:</span>
-              <span className={`limit-value ${remainingDays !== null && remainingDays < 0 ? 'error' : ''}`}>
-                {remainingDays ?? 'N/A'}
-              </span>
-            </div>
+            {/* Блок "Останется после заявки" удален полностью */}
           </>
         ) : (
           <div className="info-message">Лимит отпуска на {year} год не найден или не установлен.</div>
