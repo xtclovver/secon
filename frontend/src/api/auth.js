@@ -82,17 +82,17 @@ const transformUserKeys = (backendUser) => {
 
 /**
  * Авторизация пользователя
- * @param {Object} credentials - Объект с данными для входа (например, { email, password })
+ * @param {Object} credentials - Объект с данными для входа { email, password } (email используется как login)
  * @returns {Promise<Object>} - Объект с данными пользователя и токеном
  */
 export const login = async (credentials) => {
   try {
-    // Отправляем объект с полями username и password, как ожидает бэкенд
+    // Отправляем объект с полями login и password, как ожидает бэкенд
     const payload = {
-      username: credentials.email, // Используем email как username
+      login: credentials.email, // Используем email из формы как login для бэкенда
       password: credentials.password
     };
-    const response = await authApi.post('/auth/login', payload); // Отправляем измененный payload
+    const response = await authApi.post('/auth/login', payload); // Отправляем login вместо username
     // Сохраняем токен и данные пользователя в localStorage при успешном входе
     const token = response.data?.token;
     const backendUser = response.data?.user;

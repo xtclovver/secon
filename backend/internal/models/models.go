@@ -84,7 +84,7 @@ func (cd *CustomDate) Scan(value interface{}) error {
 // User - модель пользователя
 type User struct {
 	ID           int       `json:"id" db:"id"`
-	Username     string    `json:"username" db:"username"`
+	Login        string    `json:"login" db:"login"` // Изменено с Username на Login
 	Password     string    `json:"-" db:"password"`
 	FullName     string    `json:"full_name" db:"full_name"`
 	Email        string    `json:"email" db:"email"`

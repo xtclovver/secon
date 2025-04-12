@@ -12,7 +12,7 @@ import (
 
 // UserRepositoryInterface определяет методы для репозитория пользователей
 type UserRepositoryInterface interface {
-	FindByUsername(username string) (*models.User, error)
+	FindByLogin(login string) (*models.User, error) // Изменено FindByUsername на FindByLogin
 	FindByID(id int) (*models.User, error)
 	GetUsersByDepartment(departmentID int) ([]models.User, error)
 	CreateUser(user *models.User) error
@@ -33,15 +33,15 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// FindByUsername находит пользователя по имени пользователя
-func (r *UserRepository) FindByUsername(username string) (*models.User, error) {
+// FindByLogin находит пользователя по логину
+func (r *UserRepository) FindByLogin(login string) (*models.User, error) { // Изменено FindByUsername на FindByLogin
 	// Запрос к БД для поиска пользователя
 	query := `
-		SELECT id, username, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at
+		SELECT id, login, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at
 		FROM users
-		WHERE username = ?`
+		WHERE login = ?` // username -> login
 
-	row := r.db.QueryRow(query, username)
+	row := r.db.QueryRow(query, login) // username -> login
 	user := &models.User{}
 
 	// Используем nullable типы для department_id и position_id
@@ -49,7 +49,7 @@ func (r *UserRepository) FindByUsername(username string) (*models.User, error) {
 	var positionID sql.NullInt64
 
 	err := row.Scan(
-		&user.ID, &user.Username, &user.Password, &user.FullName, &user.Email,
+		&user.ID, &user.Login, &user.Password, &user.FullName, &user.Email, // Username -> Login
 		&departmentID, // Сканируем в nullable тип
 		&positionID,   // Сканируем в nullable тип
 		&user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
@@ -60,7 +60,7 @@ func (r *UserRepository) FindByUsername(username string) (*models.User, error) {
 			return nil, nil // Пользователь не найден, ошибки нет
 		}
 		// Логирование ошибки может быть полезно
-		// log.Printf("Ошибка сканирования пользователя %s: %v", username, err)
+		// log.Printf("Ошибка сканирования пользователя %s: %v", login, err) // username -> login
 		return nil, fmt.Errorf("ошибка при поиске пользователя в БД: %w", err)
 	}
 
@@ -86,9 +86,9 @@ func (r *UserRepository) FindByUsername(username string) (*models.User, error) {
 // FindByID находит пользователя по ID
 func (r *UserRepository) FindByID(id int) (*models.User, error) {
 	query := `
-		SELECT id, username, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at
+		SELECT id, login, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at
 		FROM users
-		WHERE id = ?`
+		WHERE id = ?` // username -> login
 
 	row := r.db.QueryRow(query, id)
 	user := &models.User{}
@@ -96,7 +96,7 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 	var positionID sql.NullInt64
 
 	err := row.Scan(
-		&user.ID, &user.Username, &user.Password, &user.FullName, &user.Email,
+		&user.ID, &user.Login, &user.Password, &user.FullName, &user.Email, // Username -> Login
 		&departmentID, &positionID, &user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -127,9 +127,9 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 // GetUsersByDepartment получает список пользователей по ID подразделения
 func (r *UserRepository) GetUsersByDepartment(departmentID int) ([]models.User, error) {
 	query := `
-		SELECT id, username, full_name, email, is_admin, is_manager 
+		SELECT id, login, full_name, email, is_admin, is_manager 
 		FROM users 
-		WHERE department_id = ?`
+		WHERE department_id = ?` // username -> login
 
 	rows, err := r.db.Query(query, departmentID)
 	if err != nil {
@@ -141,7 +141,7 @@ func (r *UserRepository) GetUsersByDepartment(departmentID int) ([]models.User, 
 	for rows.Next() {
 		var user models.User
 		// Сканируем только нужные поля для этого запроса
-		if err := rows.Scan(&user.ID, &user.Username, &user.FullName, &user.Email, &user.IsAdmin, &user.IsManager); err != nil {
+		if err := rows.Scan(&user.ID, &user.Login, &user.FullName, &user.Email, &user.IsAdmin, &user.IsManager); err != nil { // Username -> Login
 			// Логирование ошибки сканирования может быть полезно
 			// log.Printf("Ошибка сканирования пользователя подразделения: %v", err)
 			// Продолжаем сканировать остальных, но можно и вернуть ошибку
@@ -166,17 +166,17 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 	}
 
 	query := `
-		INSERT INTO users (username, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+		INSERT INTO users (login, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)` // username -> login
 
 	result, err := r.db.Exec(query,
-		user.Username, string(hashedPassword), user.FullName, user.Email,
+		user.Login, string(hashedPassword), user.FullName, user.Email, // Username -> Login
 		user.DepartmentID, // Может быть nil
 		user.PositionID,   // Может быть nil
 		user.IsAdmin, user.IsManager,
 	)
 	if err != nil {
-		// Обработка специфических ошибок БД (например, дубликат username) может быть добавлена здесь
+		// Обработка специфических ошибок БД (например, дубликат login) может быть добавлена здесь
 		return fmt.Errorf("ошибка создания пользователя: %w", err)
 	}
 

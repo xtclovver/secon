@@ -58,9 +58,9 @@ function LoginPage() {
           <form> {/* Снова убираем onSubmit отсюда */}
             {error && <p className="error-message">{error}</p>}
             <div className="form-group">
-              <label htmlFor="login-email">Email</label>
+              <label htmlFor="login-email">Логин</label>
               <input
-                type="email"
+                type="text" // Changed from email to text
                 id="login-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
