@@ -1,0 +1,2751 @@
+# План разработки программы автоматизированного составления графика отпусков
+
+## 1. Структура базы данных MySQL
+CREATE DATABASE IF NOT EXISTS vacation_scheduler;
+USE vacation_scheduler;
+
+-- Таблица пользователей
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    department_id INT,
+    is_admin BOOLEAN DEFAULT FALSE,
+    is_manager BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Таблица подразделений
+CREATE TABLE departments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    manager_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Добавление внешнего ключа в таблицу пользователей
+ALTER TABLE users
+ADD FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL;
+
+-- Таблица лимитов отпусков
+CREATE TABLE vacation_limits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    year INT NOT NULL,
+    total_days INT NOT NULL DEFAULT 28,
+    used_days INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY (user_id, year)
+);
+
+-- Таблица заявок на отпуск
+CREATE TABLE vacation_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    year INT NOT NULL,
+    status_id INT NOT NULL,
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Таблица периодов отпуска
+CREATE TABLE vacation_periods (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    request_id INT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    days_count INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (request_id) REFERENCES vacation_requests(id) ON DELETE CASCADE
+);
+
+-- Таблица статусов заявок
+CREATE TABLE vacation_status (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    description TEXT
+);
+
+-- Добавление внешнего ключа в таблицу заявок
+ALTER TABLE vacation_requests
+ADD FOREIGN KEY (status_id) REFERENCES vacation_status(id);
+
+-- Таблица уведомлений
+CREATE TABLE notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Заполнение таблицы статусов
+INSERT INTO vacation_status (name, description) VALUES
+('Черновик', 'Заявка создана, но не отправлена'),
+('На рассмотрении', 'Заявка отправлена руководителю'),
+('Утверждена', 'Заявка утверждена руководителем'),
+('Отклонена', 'Заявка отклонена руководителем'),
+('Отменена', 'Заявка отменена сотрудником');
+## 2. Структура проекта
+
+### Структура backend (Go)
+```
+/backend
+  /cmd
+    /api
+      main.go             # Точка входа в приложение
+  /internal
+    /auth                # Аутентификация
+    /config              # Конфигурация
+    /database            # Работа с БД
+    /models              # Модели данных
+    /handlers            # Обработчики запросов
+    /middleware          # Промежуточные обработчики
+    /services            # Бизнес-логика
+    /utils               # Утилиты
+  /migrations            # Миграции БД
+  go.mod
+  go.sum
+```
+
+### Структура frontend (React)
+```
+/frontend
+  /public
+  /src
+    /api                 # API клиенты
+    /assets              # Статические файлы
+    /components          # Общие компоненты
+      /ui                # UI компоненты
+    /context             # React контексты
+    /hooks               # Кастомные хуки
+    /pages               # Страницы приложения
+      /auth              # Страницы аутентификации
+      /dashboard         # Дашборд
+      /vacations         # Страницы для работы с отпусками
+    /styles              # Стили
+      /themes            # Темы оформления
+    /utils               # Утилиты
+    App.jsx              # Основной компонент
+    index.jsx            # Точка входа
+  package.json
+```
+
+## 3. Backend (Go) - основные компоненты
+# Основные модели
+package models
+
+import (
+	"time"
+)
+
+// User - модель пользователя
+type User struct {
+	ID           int       `json:"id" db:"id"`
+	Username     string    `json:"username" db:"username"`
+	Password     string    `json:"-" db:"password"`
+	FullName     string    `json:"full_name" db:"full_name"`
+	Email        string    `json:"email" db:"email"`
+	DepartmentID *int      `json:"department_id" db:"department_id"`
+	IsAdmin      bool      `json:"is_admin" db:"is_admin"`
+	IsManager    bool      `json:"is_manager" db:"is_manager"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Department - модель подразделения
+type Department struct {
+	ID        int       `json:"id" db:"id"`
+	Name      string    `json:"name" db:"name"`
+	ManagerID *int      `json:"manager_id" db:"manager_id"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// VacationRequest - модель заявки на отпуск
+type VacationRequest struct {
+	ID        int               `json:"id" db:"id"`
+	UserID    int               `json:"user_id" db:"user_id"`
+	Year      int               `json:"year" db:"year"`
+	StatusID  int               `json:"status_id" db:"status_id"`
+	Comment   string            `json:"comment" db:"comment"`
+	CreatedAt time.Time         `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at" db:"updated_at"`
+	Periods   []VacationPeriod  `json:"periods"`
+}
+
+// VacationPeriod - модель периода отпуска
+type VacationPeriod struct {
+	ID        int       `json:"id" db:"id"`
+	RequestID int       `json:"request_id" db:"request_id"`
+	StartDate time.Time `json:"start_date" db:"start_date"`
+	EndDate   time.Time `json:"end_date" db:"end_date"`
+	DaysCount int       `json:"days_count" db:"days_count"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// VacationLimit - модель лимита отпуска
+type VacationLimit struct {
+	ID        int       `json:"id" db:"id"`
+	UserID    int       `json:"user_id" db:"user_id"`
+	Year      int       `json:"year" db:"year"`
+	TotalDays int       `json:"total_days" db:"total_days"`
+	UsedDays  int       `json:"used_days" db:"used_days"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Notification - модель уведомления
+type Notification struct {
+	ID        int       `json:"id" db:"id"`
+	UserID    int       `json:"user_id" db:"user_id"`
+	Title     string    `json:"title" db:"title"`
+	Message   string    `json:"message" db:"message"`
+	IsRead    bool      `json:"is_read" db:"is_read"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+// VacationStatus - модель статуса отпуска
+type VacationStatus struct {
+	ID          int    `json:"id" db:"id"`
+	Name        string `json:"name" db:"name"`
+	Description string `json:"description" db:"description"`
+}
+
+// Intersection - модель пересечения отпусков
+type Intersection struct {
+	UserID1     int       `json:"user_id_1"`
+	UserName1   string    `json:"user_name_1"`
+	UserID2     int       `json:"user_id_2"`
+	UserName2   string    `json:"user_name_2"`
+	StartDate   time.Time `json:"start_date"`
+	EndDate     time.Time `json:"end_date"`
+	DaysCount   int       `json:"days_count"`
+}
+# Сервис отпусков
+package services
+
+import (
+	"errors"
+	"time"
+	
+	"vacation-scheduler/internal/models"
+)
+
+type VacationRepository interface {
+	GetVacationLimit(userID int, year int) (*models.VacationLimit, error)
+	SaveVacationRequest(request *models.VacationRequest) error
+	UpdateVacationRequest(request *models.VacationRequest) error
+	GetVacationRequestsByDepartment(departmentID int, year int) ([]models.VacationRequest, error)
+	GetUsersByDepartment(departmentID int) ([]models.User, error)
+	CreateNotification(notification *models.Notification) error
+}
+
+type VacationService struct {
+	repo VacationRepository
+}
+
+func NewVacationService(repo VacationRepository) *VacationService {
+	return &VacationService{
+		repo: repo,
+	}
+}
+
+// ValidateVacationRequest проверяет условия отпуска
+func (s *VacationService) ValidateVacationRequest(request *models.VacationRequest) error {
+	// Проверка на наличие части отпуска не менее 14 дней
+	hasLongPeriod := false
+	totalDays := 0
+
+	for _, period := range request.Periods {
+		totalDays += period.DaysCount
+		if period.DaysCount >= 14 {
+			hasLongPeriod = true
+		}
+	}
+
+	if !hasLongPeriod {
+		return errors.New("Одна из частей отпуска должна быть не менее 14 календарных дней")
+	}
+
+	// Проверка лимита дней
+	limit, err := s.repo.GetVacationLimit(request.UserID, request.Year)
+	if err != nil {
+		return errors.New("Ошибка при получении лимита отпуска: " + err.Error())
+	}
+
+	if totalDays > (limit.TotalDays - limit.UsedDays) {
+		return errors.New("Превышен доступный лимит дней отпуска")
+	}
+
+	return nil
+}
+
+// SaveVacationRequest сохраняет заявку на отпуск
+func (s *VacationService) SaveVacationRequest(request *models.VacationRequest) error {
+	// Устанавливаем статус черновика, если не указан
+	if request.StatusID == 0 {
+		request.StatusID = 1 // Черновик
+	}
+	
+	return s.repo.SaveVacationRequest(request)
+}
+
+// SubmitVacationRequest отправляет заявку руководителю
+func (s *VacationService) SubmitVacationRequest(requestID int, userID int) error {
+	// Здесь должна быть логика получения заявки по ID и проверка доступа пользователя
+	
+	// Устанавливаем статус "На рассмотрении"
+	request := &models.VacationRequest{
+		ID:       requestID,
+		UserID:   userID,
+		StatusID: 2, // На рассмотрении
+	}
+	
+	return s.repo.UpdateVacationRequest(request)
+}
+
+// CheckIntersections проверяет пересечения отпусков в подразделении
+func (s *VacationService) CheckIntersections(departmentID int, year int) ([]models.Intersection, error) {
+	// Получаем все заявки на отпуск в подразделении за указанный год
+	requests, err := s.repo.GetVacationRequestsByDepartment(departmentID, year)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Получаем всех сотрудников подразделения
+	users, err := s.repo.GetUsersByDepartment(departmentID)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Создаем мапу для быстрого поиска пользователей по ID
+	userMap := make(map[int]models.User)
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+	
+	// Ищем пересечения
+	var intersections []models.Intersection
+	
+	for i, req1 := range requests {
+		for j := i + 1; j < len(requests); j++ {
+			req2 := requests[j]
+			
+			// Пропускаем, если заявки от одного пользователя
+			if req1.UserID == req2.UserID {
+				continue
+			}
+			
+			// Проверяем пересечения периодов
+			for _, period1 := range req1.Periods {
+				for _, period2 := range req2.Periods {
+					if doPeriodIntersect(period1, period2) {
+						// Находим период пересечения
+						start := max(period1.StartDate, period2.StartDate)
+						end := min(period1.EndDate, period2.EndDate)
+						daysCount := int(end.Sub(start).Hours() / 24) + 1
+						
+						intersection := models.Intersection{
+							UserID1:     req1.UserID,
+							UserName1:   userMap[req1.UserID].FullName,
+							UserID2:     req2.UserID,
+							UserName2:   userMap[req2.UserID].FullName,
+							StartDate:   start,
+							EndDate:     end,
+							DaysCount:   daysCount,
+						}
+						
+						intersections = append(intersections, intersection)
+					}
+				}
+			}
+		}
+	}
+	
+	return intersections, nil
+}
+
+// NotifyManager уведомляет руководителя о пересечениях отпусков
+func (s *VacationService) NotifyManager(managerID int, intersections []models.Intersection) error {
+	if len(intersections) == 0 {
+		return nil
+	}
+	
+	notification := &models.Notification{
+		UserID:    managerID,
+		Title:     "Обнаружено пересечение отпусков",
+		Message:   "В подразделении обнаружены пересечения отпусков сотрудников. Требуется ваше внимание.",
+		IsRead:    false,
+		CreatedAt: time.Now(),
+	}
+	
+	return s.repo.CreateNotification(notification)
+}
+
+// Вспомогательные функции
+
+// doPeriodIntersect проверяет, пересекаются ли два периода отпуска
+func doPeriodIntersect(period1, period2 models.VacationPeriod) bool {
+	return period1.StartDate.Before(period2.EndDate) && period2.StartDate.Before(period1.EndDate)
+}
+
+// max возвращает более позднюю из двух дат
+func max(date1, date2 time.Time) time.Time {
+	if date1.After(date2) {
+		return date1
+	}
+	return date2
+}
+
+// min возвращает более раннюю из двух дат
+func min(date1, date2 time.Time) time.Time {
+	if date1.Before(date2) {
+		return date1
+	}
+	return date2
+}
+# Обработчики запросов
+package handlers
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+	
+	"github.com/gin-gonic/gin"
+	
+	"vacation-scheduler/internal/models"
+	"vacation-scheduler/internal/services"
+)
+
+type VacationHandler struct {
+	vacationService *services.VacationService
+}
+
+func NewVacationHandler(vs *services.VacationService) *VacationHandler {
+	return &VacationHandler{
+		vacationService: vs,
+	}
+}
+
+// GetVacationLimit обработчик для получения лимита отпуска
+func (h *VacationHandler) GetVacationLimit(c *gin.Context) {
+	yearStr := c.Param("year")
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат года"})
+		return
+	}
+	
+	// Получаем ID пользователя из контекста (установленного middleware аутентификации)
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	
+	// Получаем лимит отпуска из сервиса
+	limit, err := h.vacationService.GetVacationLimit(userID.(int), year)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения лимита отпуска: " + err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, limit)
+}
+
+// CreateVacationRequest обработчик для создания заявки на отпуск
+func (h *VacationHandler) CreateVacationRequest(c *gin.Context) {
+	var request models.VacationRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Ошибка чтения данных: " + err.Error()})
+		return
+	}
+	
+	// Получаем ID пользователя из контекста
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	request.UserID = userID.(int)
+	
+	// Валидация заявки
+	if err := h.vacationService.ValidateVacationRequest(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	// Сохранение заявки
+	if err := h.vacationService.SaveVacationRequest(&request); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка сохранения заявки: " + err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusCreated, request)
+}
+
+// SubmitVacationRequest обработчик для отправки заявки руководителю
+func (h *VacationHandler) SubmitVacationRequest(c *gin.Context) {
+	requestIDStr := c.Param("id")
+	requestID, err := strconv.Atoi(requestIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID заявки"})
+		return
+	}
+	
+	// Получаем ID пользователя из контекста
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	
+	// Отправляем заявку руководителю
+	if err := h.vacationService.SubmitVacationRequest(requestID, userID.(int)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка отправки заявки: " + err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Заявка успешно отправлена руководителю"})
+}
+
+// GetVacationIntersections обработчик для получения пересечений отпусков
+func (h *VacationHandler) GetVacationIntersections(c *gin.Context) {
+	departmentIDStr := c.Query("departmentId")
+	departmentID, err := strconv.Atoi(departmentIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID подразделения"})
+		return
+	}
+	
+	yearStr := c.Query("year")
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат года"})
+		return
+	}
+	
+	// Проверяем, является ли пользователь руководителем
+	isManager, exists := c.Get("isManager")
+	if !exists || !isManager.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права руководителя"})
+		return
+	}
+	
+	// Получаем пересечения отпусков
+	intersections, err := h.vacationService.CheckIntersections(departmentID, year)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при проверке пересечений: " + err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, intersections)
+}
+
+// GetMyVacations обработчик для получения собственных заявок на отпуск
+func (h *VacationHandler) GetMyVacations(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	
+	yearStr := c.Query("year")
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат года"})
+		return
+	}
+	
+	// Получение заявок пользователя из сервиса
+	// В реальном приложении здесь будет вызов метода сервиса
+	
+	// Временный ответ для примера
+	c.JSON(http.StatusOK, gin.H{"message": "Здесь будут ваши заявки на отпуск"})
+}
+
+// GetDepartmentVacations обработчик для получения отпусков сотрудников подразделения
+func (h *VacationHandler) GetDepartmentVacations(c *gin.Context) {
+	isManager, exists := c.Get("isManager")
+	if !exists || !isManager.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права руководителя"})
+		return
+	}
+	
+	departmentIDStr := c.Param("id")
+	departmentID, err := strconv.Atoi(departmentIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID подразделения"})
+		return
+	}
+	
+	yearStr := c.Query("year")
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат года"})
+		return
+	}
+	
+	// Получение заявок подразделения из сервиса
+	// В реальном приложении здесь будет вызов метода сервиса
+	
+	// Временный ответ для примера
+	c.JSON(http.StatusOK, gin.H{"message": "Здесь будут отпуска сотрудников подразделения"})
+}
+# Основная точка в входе
+package main
+
+import (
+	"log"
+	
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	
+	"vacation-scheduler/internal/config"
+	"vacation-scheduler/internal/database"
+	"vacation-scheduler/internal/handlers"
+	"vacation-scheduler/internal/middleware"
+	"vacation-scheduler/internal/repositories"
+	"vacation-scheduler/internal/services"
+)
+
+func main() {
+	// Загрузка конфигурации
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Ошибка загрузки конфигурации: %v", err)
+	}
+	
+	// Инициализация подключения к базе данных
+	db, err := database.NewConnection(cfg.Database)
+	if err != nil {
+		log.Fatalf("Ошибка подключения к базе данных: %v", err)
+	}
+	defer db.Close()
+	
+	// Создание репозиториев
+	userRepo := repositories.NewUserRepository(db)
+	vacationRepo := repositories.NewVacationRepository(db)
+	
+	// Создание сервисов
+	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
+	vacationService := services.NewVacationService(vacationRepo)
+	
+	// Создание обработчиков
+	authHandler := handlers.NewAuthHandler(authService)
+	vacationHandler := handlers.NewVacationHandler(vacationService)
+	
+	// Настройка маршрутизатора Gin
+	router := gin.Default()
+	
+	// Настройка CORS
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+	
+	// Публичные маршруты
+	router.POST("/api/auth/login", authHandler.Login)
+	
+	// Защищенные маршруты
+	api := router.Group("/api")
+	api.Use(middleware.JWTAuth(cfg.JWT.Secret))
+	{
+		// Маршруты для работы с отпусками
+		vacations := api.Group("/vacations")
+		{
+			vacations.GET("/limits/:year", vacationHandler.GetVacationLimit)
+			vacations.POST("/requests", vacationHandler.CreateVacationRequest)
+			vacations.POST("/requests/:id/submit", vacationHandler.SubmitVacationRequest)
+			vacations.GET("/my", vacationHandler.GetMyVacations)
+			
+			// Маршруты для руководителей
+			vacations.GET("/department/:id", vacationHandler.GetDepartmentVacations)
+			vacations.GET("/intersections", vacationHandler.GetVacationIntersections)
+		}
+		
+		// Маршруты для администраторов
+		admin := api.Group("/admin")
+		admin.Use(middleware.AdminOnly())
+		{
+			// Здесь будут маршруты для администраторов
+		}
+	}
+	
+	// Запуск сервера
+	if err := router.Run(cfg.Server.Port); err != nil {
+		log.Fatalf("Ошибка запуска сервера: %v", err)
+	}
+}
+
+## 4. Frontend (React) - основные компоненты
+# Контекст темы
+import React, { createContext, useState, useEffect } from 'react';
+
+export const ThemeContext = createContext();
+
+export const ThemeProvider = ({ children }) => {
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const isDarkMode = localStorage.getItem('darkMode') === 'true';
+    setDarkMode(isDarkMode);
+    applyTheme(isDarkMode);
+  }, []);
+
+  const toggleTheme = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    localStorage.setItem('darkMode', newDarkMode.toString());
+    applyTheme(newDarkMode);
+  };
+
+  const applyTheme = (isDark) => {
+    document.body.classList.toggle('dark-theme', isDark);
+    document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
+    
+    if (isDark) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  };
+
+  return (
+    <ThemeContext.Provider value={{ darkMode, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export default ThemeProvider;
+# Переключатель темы
+import React, { useContext } from 'react';
+import { motion } from 'framer-motion';
+import { ThemeContext } from '../../context/ThemeContext';
+import { FaSun, FaMoon } from 'react-icons/fa';
+import './ThemeToggle.css';
+
+const ThemeToggle = () => {
+  const { darkMode, toggleTheme } = useContext(ThemeContext);
+
+  return (
+    <motion.div
+      className="theme-toggle"
+      onClick={toggleTheme}
+      whileTap={{ scale: 0.95 }}
+      whileHover={{ scale: 1.05 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+    >
+      <motion.div 
+        className="toggle-track" 
+        initial={false}
+        animate={{ backgroundColor: darkMode ? '#2d3748' : '#cbd5e0' }}
+      >
+        <motion.div 
+          className="toggle-thumb"
+          initial={false}
+          animate={{ 
+            x: darkMode ? 28 : 0,
+            backgroundColor: darkMode ? '#1a202c' : '#ffffff' 
+          }}
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        />
+        
+        <motion.div 
+          className="toggle-icon sun"
+          initial={false}
+          animate={{ opacity: darkMode ? 0.2 : 1 }}
+        >
+          <FaSun />
+        </motion.div>
+        
+        <motion.div 
+          className="toggle-icon moon"
+          initial={false}
+          animate={{ opacity: darkMode ? 1 : 0.2 }}
+        >
+          <FaMoon />
+        </motion.div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+export default ThemeToggle;
+# Страница входа
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { FaUser, FaLock } from 'react-icons/fa';
+import { login } from '../../api/auth';
+import './LoginPage.css';
+
+const LoginPage = () => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    
+    try {
+      const data = await login(username, password);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // Перенаправление в зависимости от роли пользователя
+      if (data.user.isAdmin) {
+        navigate('/admin/dashboard');
+      } else if (data.user.isManager) {
+        navigate('/manager/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      setError(err.message || 'Ошибка при входе. Пожалуйста, проверьте учетные данные.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div 
+      className="login-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div 
+        className="login-container"
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ 
+          type: 'spring', 
+          stiffness: 300, 
+          damping: 20,
+          delay: 0.2
+        }}
+      >
+        <motion.div 
+          className="login-header"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <h1>Система учета отпусков</h1>
+          <p>Введите учетные данные для входа</p>
+        </motion.div>
+        
+        {error && (
+          <motion.div 
+            className="error-message"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            {error}
+          </motion.div>
+        )}
+        
+        <form onSubmit={handleSubmit}>
+          <motion.div 
+            className="input-group"
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
+            <FaUser className="input-icon" />
+            <input
+              type="text"
+              id="username"
+              placeholder="Имя пользователя"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+          </motion.div>
+          
+          <motion.div 
+            className="input-group"
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            <FaLock className="input-icon" />
+            <input
+              type="password"
+              id="password"
+              placeholder="Пароль"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </motion.div>
+          
+          <motion.button
+            type="submit"
+            className="login-button"
+            disabled={loading}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.6 }}
+          >
+            {loading ? 'Выполняется вход...' : 'Войти'}
+          </motion.button>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+export default LoginPage;
+# Форма заявки на отпуск
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import DatePicker, { registerLocale } from 'react-datepicker';
+import { toast } from 'react-toastify';
+import { FaCalendarAlt, FaPlus, FaTrash, FaSave, FaPaperPlane } from 'react-icons/fa';
+import ru from 'date-fns/locale/ru';
+import { getVacationLimit, createVacationRequest, submitVacationRequest } from '../../api/vacations';
+import 'react-datepicker/dist/react-datepicker.css';
+import './VacationForm.css';
+
+// Регистрация русской локали для DatePicker
+registerLocale('ru', ru);
+
+const VacationForm = () => {
+  const [year, setYear] = useState(new Date().getFullYear() + 1);
+  const [periods, setPeriods] = useState([{ startDate: null, endDate: null, daysCount: 0 }]);
+  const [status, setStatus] = useState('draft');
+  const [limit, setLimit] = useState(28);
+  const [usedDays, setUsedDays] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [requestId, setRequestId] = useState(null);
+
+  // Загрузка лимита отпуска при изменении года
+  useEffect(() => {
+    const fetchLimit = async () => {
+      try {
+        setLoading(true);
+        const limitData = await getVacationLimit(year);
+        setLimit(limitData.totalDays);
+        setUsedDays(limitData.usedDays);
+      } catch (error) {
+        toast.error("Ошибка при загрузке лимита отпуска");
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchLimit();
+  }, [year]);
+
+  // Вычисление общего количества дней
+  const totalDaysRequested = periods.reduce((sum, period) => sum + period.daysCount, 0);
+  const remainingDays = limit - usedDays - totalDaysRequested;
+
+  // Функция для подсчета дней между датами
+  const calculateDays = (startDate, endDate) => {
+    if (!startDate || !endDate) return 0;
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  // Обработка изменения года
+  const handleYearChange = (e) => {
+    setYear(parseInt(e.target.value));
+  };
+
+  // Обработка изменения дат
+  const handleDateChange = (index, field, date) => {
+    const newPeriods = [...periods];
+    newPeriods[index][field] = date;
+    
+    if (newPeriods[index].startDate && newPeriods[index].endDate) {
+      newPeriods[index].daysCount = calculateDays(
+        newPeriods[index].startDate,
+        newPeriods[index].endDate
+      );
+    }
+    
+    setPeriods(newPeriods);
+    validateForm(newPeriods);
+  };
+
+  // Добавление нового периода
+  const addPeriod = () => {
+    setPeriods([...periods, { startDate: null, endDate: null, daysCount: 0 }]);
+  };
+
+  // Удаление периода
+  const removePeriod = (index) => {
+    const newPeriods = periods.filter((_, i) => i !== index);
+    setPeriods(newPeriods);
+    validateForm(newPeriods);
+  };
+
+  // Валидация формы
+  const validateForm = (periodsToValidate = periods) => {
+    const newErrors = {};
+    
+    // Проверка заполнения всех дат
+    const hasEmptyDates = periodsToValidate.some(
+      period => !period.startDate || !period.endDate
+    );
+    
+    if (hasEmptyDates) {
+      newErrors.emptyDates = 'Все даты должны быть заполнены';
+    }
+    
+    // Проверка на наличие хотя бы одного периода >= 14 дней
+    const hasLongPeriod = periodsToValidate.some(period => period.daysCount >= 14);
+    if (!hasLongPeriod && !hasEmptyDates) {
+      newErrors.longPeriod = 'Одна из частей отпуска должна быть не менее 14 календарных дней';
+    }
+    
+    // Проверка на превышение лимита
+    const totalRequested = periodsToValidate.reduce((sum, period) => sum + period.daysCount, 0);
+    if (totalRequested > (limit - usedDays)) {
+      newErrors.limit = 'Превышен доступный лимит дней отпуска';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Сохранение заявки
+  const handleSave = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    try {
+      setSubmitting(true);
+      
+      const vacationRequest = {
+        year,
+        periods: periods.map(period => ({
+          startDate: period.startDate,
+          endDate: period.endDate,
+          daysCount: period.daysCount
+        })),
+        statusId: 1 // Черновик
+      };
+      
+      const response = await createVacationRequest(vacationRequest);
+      setRequestId(response.id);
+      toast.success('Заявка успешно сохранена');
+    } catch (error) {
+      toast.error(error.message || 'Ошибка при сохранении заявки');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Отправка заявки руководителю
+  const handleSubmit = async () => {
+    if (!requestId) {
+      toast.error('Сначала сохраните заявку');
+      return;
+    }
+    
+    try {
+      setSubmitting(true);
+      await submitVacationRequest(requestId);
+      toast.success('Заявка успешно отправлена руководителю');
+      setStatus('submitted');
+    } catch (error) {
+      toast.error(error.message || 'Ошибка при отправке заявки');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <motion.div
+      className="vacation-form-container"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <h2>Оформление отпуска на {year} год</h2>
+      
+      <div className="year-selector">
+        <label htmlFor="year">Выберите год:</label>
+        <select id="year" value={year} onChange={handleYearChange} disabled={loading}>
+          <option value={new Date().getFullYear()}>Текущий год</option>
+          <option value={new Date().getFullYear() + 1}>Следующий год</option>
+        </select>
+      </div>
+      
+      <motion.div 
+        className="vacation-limits"
+        initial={{ x: -20, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="limit-item">
+          <span>Доступно дней:</span>
+          <span className="limit-value">{limit}</span>
+        </div>
+        <div className="limit-item">
+          <span>Использовано:</span>
+          <span className="limit-value">{usedDays}</span>
+        </div>
+        <div className="limit-item">
+          <span>Запрошено:</span>
+          <span className="limit-value">{totalDaysRequested}</span>
+        </div>
+        <div className="limit-item">
+          <span>Осталось:</span>
+          <span className={`limit-value ${remainingDays < 0 ? 'error' : ''}`}>
+            {remainingDays}
+          </span>
+        </div>
+      </motion.div>
+      
+      {errors.limit && <div className="error-message">{errors.limit}</div>}
+      {errors.longPeriod && <div className="error-message">{errors.longPeriod}</div>}
+      {errors.emptyDates && <div className="error-message">{errors.emptyDates}</div>}
+      
+      <form onSubmit={handleSave}>
+        <AnimatePresence>
+          {periods.map((period, index) => (
+            <motion.div 
+              key={index}
+              className="vacation-period"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <h3>Часть отпуска {index + 1}</h3>
+              
+              <div className="date-inputs">
+                <div className="date-field">
+                  <label>Дата начала</label>
+                  <div className="date-picker-container">
+                    <DatePicker
+                      selected={period.startDate}
+                      onChange={(date) => handleDateChange(index, 'startDate', date)}
+                      selectsStart
+                      startDate={period.startDate}
+                      endDate={period.endDate}
+                      minDate={new Date(year, 0, 1)}
+                      maxDate={new Date(year, 11, 31)}
+                      dateFormat="dd.MM.yyyy"
+                      locale="ru"
+                      placeholderText="Выберите дату"
+                      className="date-input"
+                    />
+                    <FaCalendarAlt className="date-icon" />
+                  </div>
+                </div>
+                
+                <div className="date-field">
+                  <label>Дата окончания</label>
+                  <div className="date-picker-container">
+                    <DatePicker
+                      selected={period.endDate}
+                      onChange={(date) => handleDateChange(index, 'endDate', date)}
+                      selectsEnd
+                      startDate={period.startDate}
+                      endDate={period.endDate}
+                      minDate={period.startDate || new Date(year, 0, 1)}
+                      maxDate={new Date(year, 11, 31)}
+                      dateFormat="dd.MM.yyyy"
+                      locale="ru"
+                      placeholderText="Выберите дату"
+                      className="date-input"
+                    />
+                    <FaCalendarAlt className="date-icon" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="days-count">
+                Количество дней: <strong>{period.daysCount}</strong>
+              </div>
+              
+              {periods.length > 1 && (
+                <motion.button
+                  type="button"
+                  className="remove-period"
+                  onClick={() => removePeriod(index)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <FaTrash /> Удалить часть
+                </motion.button>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        
+        <div className="form-actions">
+          <motion.button
+            type="button"
+            className="add-period"
+            onClick={addPeriod}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={submitting}
+          >
+            <FaPlus /> Добавить часть отпуска
+          </motion.button>
+          
+          <motion.button
+            type="submit"
+            className="save-request"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={submitting}
+          >
+            <FaSave /> Сохранить заявку
+          </motion.button>
+          
+          <motion.button
+            type="button"
+            className="submit-request"
+            onClick={handleSubmit}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={submitting || !requestId || status === 'submitted'}
+          >
+            <FaPaperPlane /> Отправить руководителю
+          </motion.button>
+        </div>
+      </form>
+    </motion.div>
+  );
+};
+
+export default VacationForm;
+# Дашбоард руководителя
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { toast } from 'react-toastify';
+import Calendar from 'react-calendar';
+import { FaExclamationTriangle, FaCheck, FaUser, FaCalendarAlt } from 'react-icons/fa';
+import { getDepartmentVacations, getVacationIntersections } from '../../api/vacations';
+import 'react-calendar/dist/Calendar.css';
+import './ManagerDashboard.css';
+
+const ManagerDashboard = () => {
+  const [year, setYear] = useState(new Date().getFullYear() + 1);
+  const [departmentId, setDepartmentId] = useState(1); // ID подразделения руководителя
+  const [vacations, setVacations] = useState([]);
+  const [intersections, setIntersections] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('calendar');
+  const [calendarDate, setCalendarDate] = useState(new Date());
+
+  // Загрузка данных при изменении года или подразделения
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Получение отпусков сотрудников подразделения
+        const vacationsData = await getDepartmentVacations(departmentId, year);
+        setVacations(vacationsData);
+        
+        // Получение пересечений отпусков
+        const intersectionsData = await getVacationIntersections(departmentId, year);
+        setIntersections(intersectionsData);
+      } catch (error) {
+        toast.error('Ошибка при загрузке данных');
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [year, departmentId]);
+
+  // Функция для отображения отпусков в календаре
+  const getTileContent = ({ date, view }) => {
+    if (view !== 'month') return null;
+    
+    // Находим все отпуска на эту дату
+    const vacationsOnDate = vacations.filter(vacation => {
+      return vacation.periods.some(period => {
+        const startDate = new Date(period.startDate);
+        const endDate = new Date(period.endDate);
+        return date >= startDate && date <= endDate;
+      });
+    });
+    
+    // Находим пересечения на эту дату
+    const intersectionsOnDate = intersections.filter(intersection => {
+      const startDate = new Date(intersection.startDate);
+      const endDate = new Date(intersection.endDate);
+      return date >= startDate && date <= endDate;
+    });
+    
+    if (intersectionsOnDate.length > 0) {
+      return (
+        <div className="calendar-intersection">
+          <FaExclamationTriangle />
+          <span>{intersectionsOnDate.length}</span>
+        </div>
+      );
+    }
+    
+    if (vacationsOnDate.length > 0) {
+      return (
+        <div className="calendar-vacation">
+          <FaUser />
+          <span>{vacationsOnDate.length}</span>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
+  // Функция для определения класса даты в календаре
+  const getTileClassName = ({ date, view }) => {
+    if (view !== 'month') return '';
+    
+    // Проверяем, есть ли пересечения на эту дату
+    const hasIntersections = intersections.some(intersection => {
+      const startDate = new Date(intersection.startDate);
+      const endDate = new Date(intersection.endDate);
+      return date >= startDate && date <= endDate;
+    });
+    
+    if (hasIntersections) {
+      return 'intersection-date';
+    }
+    
+    // Проверяем, есть ли отпуска на эту дату
+    const hasVacations = vacations.some(vacation => {
+      return vacation.periods.some(period => {
+        const startDate = new Date(period.startDate);
+        const endDate = new Date(period.endDate);
+        return date >= startDate && date <= endDate;
+      });
+    });
+    
+    if (hasVacations) {
+      return 'vacation-date';
+    }
+    
+    return '';
+  };
+
+  return (
+    <motion.div
+      className="manager-dashboard"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <h2>Дашборд руководителя</h2>
+      
+      <div className="dashboard-controls">
+        <div className="year-selector">
+          <label htmlFor="year">Год:</label>
+          <select 
+            id="year" 
+            value={year} 
+            onChange={(e) => setYear(parseInt(e.target.value))}
+            disabled={loading}
+          >
+            <option value={new Date().getFullYear()}>Текущий год</option>
+            <option value={new Date().getFullYear() + 1}>Следующий год</option>
+          </select>
+        </div>
+        
+        <div className="tab-selector">
+          <button 
+            className={`tab-button ${activeTab === 'calendar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('calendar')}
+          >
+            <FaCalendarAlt /> Календарь
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'intersections' ? 'active' : ''}`}
+            onClick={() => setActiveTab('intersections')}
+          >
+            <FaExclamationTriangle /> Пересечения
+          </button>
+        </div>
+      </div>
+      
+      {loading ? (
+        <div className="loading-spinner">Загрузка...</div>
+      ) : (
+        <>
+          {activeTab === 'calendar' && (
+            <motion.div 
+              className="calendar-container"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Calendar
+                onChange={setCalendarDate}
+                value={calendarDate}
+                tileContent={getTileContent}
+                tileClassName={getTileClassName}
+                locale="ru-RU"
+              />
+              
+              <div className="calendar-legend">
+                <div className="legend-item">
+                  <div className="legend-color vacation"></div>
+                  <span>Сотрудники в отпуске</span>
+                </div>
+                <div className="legend-item">
+                  <div className="legend-color intersection"></div>
+                  <span>Пересечения отпусков</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+          
+          {activeTab === 'intersections' && (
+            <motion.div 
+              className="intersections-container"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h3>Пересечения отпусков</h3>
+              
+              {intersections.length === 0 ? (
+                <div className="no-intersections">
+                  <FaCheck />
+                  <p>Пересечений отпусков не найдено</p>
+                </div>
+              ) : (
+                <div className="intersections-list">
+                  {intersections.map((intersection, index) => (
+                    <motion.div 
+                      key={index}
+                      className="intersection-item"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 * index }}
+                    >
+                      <div className="intersection-header">
+                        <FaExclamationTriangle className="intersection-icon" />
+                        <span>Пересечение #{index + 1}</span>
+                      </div>
+                      <div className="intersection-details">
+                        <div className="intersection-users">
+                          <div className="intersection-user">
+                            <FaUser />
+                            <span>{intersection.userName1}</span>
+                          </div>
+                          <div className="intersection-user">
+                            <FaUser />
+                            <span>{intersection.userName2}</span>
+                          </div>
+                        </div>
+                        <div className="intersection-dates">
+                          <div>
+                            <strong>Период пересечения:</strong> 
+                            {new Date(intersection.startDate).toLocaleDateString('ru-RU')} - 
+                            {new Date(intersection.endDate).toLocaleDateString('ru-RU')}
+                          </div>
+                          <div>
+                            <strong>Количество дней:</strong> {intersection.daysCount}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </>
+      )}
+    </motion.div>
+  );
+};
+
+export default ManagerDashboard;
+## 5. Frontend API и вспомогательные компоненты
+# API для аунтификации
+import axios from 'axios';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+
+// Создание экземпляра axios с базовым URL
+const authApi = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Перехватчик для добавления токена к запросам
+authApi.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  error => {
+    return Promise.reject(error);
+  }
+);
+
+// Перехватчик для обработки ошибок ответа
+authApi.interceptors.response.use(
+  response => response,
+  error => {
+    // Обработка 401 Unauthorized
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Авторизация пользователя
+ * @param {string} username - Имя пользователя
+ * @param {string} password - Пароль
+ * @returns {Promise<Object>} - Объект с данными пользователя и токеном
+ */
+export const login = async (username, password) => {
+  try {
+    const response = await authApi.post('/auth/login', { username, password });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка при входе');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Выход из системы
+ */
+export const logout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = '/login';
+};
+
+/**
+ * Получение информации о текущем пользователе
+ * @returns {Promise<Object>} - Объект с данными пользователя
+ */
+export const getCurrentUser = async () => {
+  try {
+    const response = await authApi.get('/auth/me');
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.status !== 401) {
+      throw new Error(error.response.data.error || 'Ошибка получения данных пользователя');
+    }
+    return null;
+  }
+};
+
+/**
+ * Проверка авторизации пользователя
+ * @returns {boolean} - true, если пользователь авторизован
+ */
+export const isAuthenticated = () => {
+  return !!localStorage.getItem('token');
+};
+
+// Экспорт экземпляра axios для использования в других API
+export default authApi;
+# API для работы с отпусками
+import authApi from './auth';
+
+/**
+ * Получение лимита отпуска на указанный год
+ * @param {number} year - Год
+ * @returns {Promise<Object>} - Данные о лимите отпуска
+ */
+export const getVacationLimit = async (year) => {
+  try {
+    const response = await authApi.get(`/vacations/limits/${year}`);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка получения лимита отпуска');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Создание заявки на отпуск
+ * @param {Object} request - Данные заявки
+ * @returns {Promise<Object>} - Созданная заявка с ID
+ */
+export const createVacationRequest = async (request) => {
+  try {
+    const response = await authApi.post('/vacations/requests', request);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка создания заявки');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Обновление заявки на отпуск
+ * @param {number} id - ID заявки
+ * @param {Object} request - Обновленные данные заявки
+ * @returns {Promise<Object>} - Обновленная заявка
+ */
+export const updateVacationRequest = async (id, request) => {
+  try {
+    const response = await authApi.put(`/vacations/requests/${id}`, request);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка обновления заявки');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Отправка заявки на рассмотрение руководителю
+ * @param {number} id - ID заявки
+ * @returns {Promise<Object>} - Результат операции
+ */
+export const submitVacationRequest = async (id) => {
+  try {
+    const response = await authApi.post(`/vacations/requests/${id}/submit`);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка отправки заявки');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Получение собственных заявок на отпуск
+ * @param {number} year - Год
+ * @returns {Promise<Array>} - Список заявок
+ */
+export const getMyVacations = async (year) => {
+  try {
+    const response = await authApi.get('/vacations/my', { params: { year } });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка получения заявок');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Получение заявок сотрудников подразделения (для руководителя)
+ * @param {number} departmentId - ID подразделения
+ * @param {number} year - Год
+ * @returns {Promise<Array>} - Список заявок
+ */
+export const getDepartmentVacations = async (departmentId, year) => {
+  try {
+    const response = await authApi.get(`/vacations/department/${departmentId}`, { params: { year } });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка получения заявок подразделения');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Получение пересечений отпусков в подразделении
+ * @param {number} departmentId - ID подразделения
+ * @param {number} year - Год
+ * @returns {Promise<Array>} - Список пересечений
+ */
+export const getVacationIntersections = async (departmentId, year) => {
+  try {
+    const response = await authApi.get('/vacations/intersections', {
+      params: { departmentId, year }
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка получения пересечений');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Получение списка статусов заявок
+ * @returns {Promise<Array>} - Список статусов
+ */
+export const getVacationStatuses = async () => {
+  try {
+    const response = await authApi.get('/vacations/statuses');
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка получения статусов');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Утверждение заявки на отпуск (для руководителя)
+ * @param {number} id - ID заявки
+ * @returns {Promise<Object>} - Результат операции
+ */
+export const approveVacationRequest = async (id) => {
+  try {
+    const response = await authApi.post(`/vacations/requests/${id}/approve`);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка утверждения заявки');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+
+/**
+ * Отклонение заявки на отпуск (для руководителя)
+ * @param {number} id - ID заявки
+ * @param {string} reason - Причина отклонения
+ * @returns {Promise<Object>} - Результат операции
+ */
+export const rejectVacationRequest = async (id, reason) => {
+  try {
+    const response = await authApi.post(`/vacations/requests/${id}/reject`, { reason });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.error || 'Ошибка отклонения заявки');
+    }
+    throw new Error('Не удалось подключиться к серверу');
+  }
+};
+# Главный компонент APP
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import { AnimatePresence } from 'framer-motion';
+
+// Context
+import { ThemeProvider } from './context/ThemeContext';
+import { UserProvider } from './context/UserContext';
+
+// Компоненты
+import ProtectedRoute from './components/ProtectedRoute';
+import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import Footer from './components/Footer';
+import Loader from './components/ui/Loader';
+
+// Страницы
+import LoginPage from './pages/auth/LoginPage';
+import UserDashboard from './pages/dashboard/UserDashboard';
+import ManagerDashboard from './pages/dashboard/ManagerDashboard';
+import AdminDashboard from './pages/dashboard/AdminDashboard';
+import VacationForm from './pages/vacations/VacationForm';
+import VacationsList from './pages/vacations/VacationsList';
+import VacationCalendar from './pages/vacations/VacationCalendar';
+import NotFoundPage from './pages/NotFoundPage';
+
+// Сервисы
+import { isAuthenticated, getCurrentUser } from './api/auth';
+
+// Стили
+import 'react-toastify/dist/ReactToastify.css';
+import './styles/App.css';
+
+const App = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (isAuthenticated()) {
+        try {
+          const userData = await getCurrentUser();
+          setUser(userData);
+        } catch (error) {
+          console.error('Ошибка получения данных пользователя:', error);
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchUser();
+  }, []);
+
+  // Отображение загрузки при инициализации приложения
+  if (loading) {
+    return <Loader />;
+  }
+
+  return (
+    <ThemeProvider>
+      <UserProvider value={{ user, setUser }}>
+        <Router>
+          <div className="app">
+            <ToastContainer
+              position="top-right"
+              autoClose={5000}
+              hideProgressBar={false}
+              newestOnTop
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="colored"
+            />
+
+            {isAuthenticated() && <Header />}
+            
+            <div className="app-container">
+              {isAuthenticated() && <Sidebar />}
+              
+              <main className="app-content">
+                <AnimatePresence mode="wait">
+                  <Routes>
+                    {/* Общедоступные маршруты */}
+                    <Route path="/login" element={isAuthenticated() ? <Navigate to="/dashboard" /> : <LoginPage />} />
+                    
+                    {/* Защищенные маршруты */}
+                    <Route element={<ProtectedRoute />}>
+                      {/* Перенаправление на соответствующий дашборд в зависимости от роли */}
+                      <Route path="/" element={
+                        <Navigate to={
+                          user?.isAdmin 
+                            ? "/admin/dashboard" 
+                            : user?.isManager 
+                              ? "/manager/dashboard" 
+                              : "/dashboard"
+                        } />
+                      } />
+                      
+                      {/* Маршруты для всех пользователей */}
+                      <Route path="/dashboard" element={<UserDashboard />} />
+                      <Route path="/vacations/new" element={<VacationForm />} />
+                      <Route path="/vacations/list" element={<VacationsList />} />
+                      <Route path="/vacations/calendar" element={<VacationCalendar />} />
+                      
+                      {/* Маршруты для руководителей */}
+                      <Route path="/manager/dashboard" element={
+                        user?.isManager ? <ManagerDashboard /> : <Navigate to="/dashboard" />
+                      } />
+                      
+                      {/* Маршруты для администраторов */}
+                      <Route path="/admin/dashboard" element={
+                        user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" />
+                      } />
+                    </Route>
+                    
+                    {/* Маршрут для страницы 404 */}
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+                </AnimatePresence>
+              </main>
+            </div>
+            
+            {isAuthenticated() && <Footer />}
+          </div>
+        </Router>
+      </UserProvider>
+    </ThemeProvider>
+  );
+};
+
+export default App;
+# Контекст пользователя
+import React, { createContext, useContext } from 'react';
+
+// Создание контекста пользователя
+export const UserContext = createContext(null);
+
+// Провайдер контекста пользователя
+export const UserProvider = ({ children, value }) => {
+  return (
+    <UserContext.Provider value={value}>
+      {children}
+    </UserContext.Provider>
+  );
+};
+
+// Хук для использования контекста пользователя
+export const useUser = () => {
+  const context = useContext(UserContext);
+  if (context === undefined) {
+    throw new Error('useUser должен использоваться внутри UserProvider');
+  }
+  return context;
+};
+
+export default UserContext;
+# Компонент header
+import React, { useState, useContext } from 'react';
+import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FaUser, FaBell, FaSignOutAlt, FaBars } from 'react-icons/fa';
+import ThemeToggle from './ThemeToggle';
+import { ThemeContext } from '../context/ThemeContext';
+import { useUser } from '../context/UserContext';
+import { logout } from '../api/auth';
+import './Header.css';
+
+const Header = () => {
+  const { darkMode } = useContext(ThemeContext);
+  const { user } = useUser();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Обработчик выхода из системы
+  const handleLogout = () => {
+    logout();
+  };
+
+  // Закрытие всех меню при клике вне компонента
+  const handleClickOutside = () => {
+    setIsProfileOpen(false);
+    setIsNotificationsOpen(false);
+  };
+
+  // Переключение меню профиля
+  const toggleProfileMenu = (e) => {
+    e.stopPropagation();
+    setIsProfileOpen(!isProfileOpen);
+    setIsNotificationsOpen(false);
+  };
+
+  // Переключение меню уведомлений
+  const toggleNotificationsMenu = (e) => {
+    e.stopPropagation();
+    setIsNotificationsOpen(!isNotificationsOpen);
+    setIsProfileOpen(false);
+  };
+
+  // Переключение мобильного меню
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  return (
+    <header className={`app-header ${darkMode ? 'dark' : 'light'}`}>
+      <div className="header-container">
+        <div className="header-left">
+          <Link to="/" className="logo">
+            <motion.span
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              Система учета отпусков
+            </motion.span>
+          </Link>
+          
+          <button className="mobile-menu-button" onClick={toggleMobileMenu}>
+            <FaBars />
+          </button>
+        </div>
+        
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div 
+              className="mobile-menu"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <nav className="mobile-nav">
+                <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>Дашборд</Link>
+                <Link to="/vacations/new" onClick={() => setIsMobileMenuOpen(false)}>Оформить отпуск</Link>
+                <Link to="/vacations/list" onClick={() => setIsMobileMenuOpen(false)}>Мои заявки</Link>
+                <Link to="/vacations/calendar" onClick={() => setIsMobileMenuOpen(false)}>Календарь</Link>
+                {user?.isManager && (
+                  <Link to="/manager/dashboard" onClick={() => setIsMobileMenuOpen(false)}>Дашборд руководителя</Link>
+                )}
+                {user?.isAdmin && (
+                  <Link to="/admin/dashboard" onClick={() => setIsMobileMenuOpen(false)}>Админ-панель</Link>
+                )}
+              </nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <div className="header-right">
+          <ThemeToggle />
+          
+          <div className="notifications-dropdown">
+            <button 
+              className="notifications-button" 
+              onClick={toggleNotificationsMenu}
+            >
+              <FaBell />
+              <span className="badge">0</span>
+            </button>
+            
+            <AnimatePresence>
+              {isNotificationsOpen && (
+                <motion.div 
+                  className="dropdown-menu"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="menu-header">Уведомления</div>
+                  <div className="empty-notifications">
+                    <p>Нет новых уведомлений</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          
+          <div className="profile-dropdown">
+            <button 
+              className="profile-button" 
+              onClick={toggleProfileMenu}
+            >
+              <FaUser />
+              <span className="user-name">{user?.fullName || 'Пользователь'}</span>
+            </button>
+            
+            <AnimatePresence>
+              {isProfileOpen && (
+                <motion.div 
+                  className="dropdown-menu"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="menu-header">
+                    <div className="user-info">
+                      <strong>{user?.fullName}</strong>
+                      <span className="user-email">{user?.email}</span>
+                      {user?.isManager && <span className="user-role">Руководитель</span>}
+                      {user?.isAdmin && <span className="user-role admin">Администратор</span>}
+                    </div>
+                  </div>
+                  <ul className="menu-list">
+                    <li>
+                      <button onClick={handleLogout}>
+                        <FaSignOutAlt />
+                        <span>Выйти</span>
+                      </button>
+                    </li>
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default Header;
+# Компонент sidebar
+import React, { useState, useContext } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { 
+  FaHome, 
+  FaCalendarAlt, 
+  FaList, 
+  FaPlusCircle, 
+  FaUsersCog,
+  FaChevronLeft,
+  FaChevronRight
+} from 'react-icons/fa';
+import { ThemeContext } from '../context/ThemeContext';
+import { useUser } from '../context/UserContext';
+import './Sidebar.css';
+
+const Sidebar = () => {
+  const { darkMode } = useContext(ThemeContext);
+  const { user } = useUser();
+  const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
+
+  // Переключение состояния сворачивания сайдбара
+  const toggleCollapse = () => {
+    setCollapsed(!collapsed);
+  };
+
+  // Проверка активного маршрута
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
+
+  // Анимация для пунктов меню
+  const itemVariants = {
+    open: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.3 }
+    },
+    closed: {
+      opacity: 0,
+      x: -20,
+      transition: { duration: 0.3 }
+    }
+  };
+
+  return (
+    <motion.aside 
+      className={`sidebar ${darkMode ? 'dark' : 'light'} ${collapsed ? 'collapsed' : ''}`}
+      initial={false}
+      animate={{ width: collapsed ? '60px' : '240px' }}
+      transition={{ duration: 0.3, ease: 'easeInOut' }}
+    >
+      <div className="sidebar-header">
+        {!collapsed && (
+          <motion.h3
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            Меню
+          </motion.h3>
+        )}
+        
+        <button className="collapse-btn" onClick={toggleCollapse}>
+          {collapsed ? <FaChevronRight /> : <FaChevronLeft />}
+        </button>
+      </div>
+      
+      <nav className="sidebar-nav">
+        <ul>
+          <li>
+            <NavLink to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>
+              <FaHome />
+              <motion.span
+                variants={itemVariants}
+                initial="closed"
+                animate={collapsed ? 'closed' : 'open'}
+              >
+                Дашборд
+              </motion.span>
+            </NavLink>
+          </li>
+          
+          <li>
+            <NavLink to="/vacations/new" className={isActive('/vacations/new') ? 'active' : ''}>
+              <FaPlusCircle />
+              <motion.span
+                variants={itemVariants}
+                initial="closed"
+                animate={collapsed ? 'closed' : 'open'}
+              >
+                Оформить отпуск
+              </motion.span>
+            </NavLink>
+          </li>
+          
+          <li>
+            <NavLink to="/vacations/list" className={isActive('/vacations/list') ? 'active' : ''}>
+              <FaList />
+              <motion.span
+                variants={itemVariants}
+                initial="closed"
+                animate={collapsed ? 'closed' : 'open'}
+              >
+                Мои заявки
+              </motion.span>
+            </NavLink>
+          </li>
+          
+          <li>
+            <NavLink to="/vacations/calendar" className={isActive('/vacations/calendar') ? 'active' : ''}>
+              <FaCalendarAlt />
+              <motion.span
+                variants={itemVariants}
+                initial="closed"
+                animate={collapsed ? 'closed' : 'open'}
+              >
+                Календарь отпусков
+              </motion.span>
+            </NavLink>
+          </li>
+          
+          {user?.isManager && (
+            <li className="manager-section">
+              <NavLink to="/manager/dashboard" className={isActive('/manager/dashboard') ? 'active' : ''}>
+                <FaUsersCog />
+                <motion.span
+                  variants={itemVariants}
+                  initial="closed"
+                  animate={collapsed ? 'closed' : 'open'}
+                >
+                  Дашборд руководителя
+                </motion.span>
+              </NavLink>
+            </li>
+          )}
+          
+          {user?.isAdmin && (
+            <li className="admin-section">
+              <NavLink to="/admin/dashboard" className={isActive('/admin/dashboard') ? 'active' : ''}>
+                <FaUsersCog />
+                <motion.span
+                  variants={itemVariants}
+                  initial="closed"
+                  animate={collapsed ? 'closed' : 'open'}
+                >
+                  Админ-панель
+                </motion.span>
+              </NavLink>
+            </li>
+          )}
+        </ul>
+      </nav>
+    </motion.aside>
+  );
+};
+
+export default Sidebar;
+# Компомент ProtectedRoute
+import React from 'react';
+import { Navigate, Outlet } from 'react-router-dom';
+import { isAuthenticated } from '../api/auth';
+
+/**
+ * Компонент для защиты маршрутов, требующих аутентификации
+ * Перенаправляет на страницу логина, если пользователь не авторизован
+ */
+const ProtectedRoute = () => {
+  if (!isAuthenticated()) {
+    // Если пользователь не авторизован, перенаправляем на страницу логина
+    return <Navigate to="/login" replace />;
+  }
+
+  // Если пользователь авторизован, отображаем вложенные маршруты
+  return <Outlet />;
+};
+
+export default ProtectedRoute;
+## 6. CSS стили для приложения
+# Переменные для тем
+/* CSS переменные для светлой и темной тем */
+:root {
+  /* Основные цвета светлой темы */
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e9ecef;
+  --text-primary: #212529;
+  --text-secondary: #6c757d;
+  --text-tertiary: #adb5bd;
+  --border-color: #dee2e6;
+  --accent-color: #0d6efd;
+  --accent-hover: #0b5ed7;
+  --success-color: #198754;
+  --warning-color: #ffc107;
+  --danger-color: #dc3545;
+  --info-color: #0dcaf0;
+  
+  /* Тени */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  
+  /* Скругления */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+  
+  /* Анимации */
+  --transition-fast: 0.2s;
+  --transition-normal: 0.3s;
+  --transition-slow: 0.5s;
+  
+  /* Размеры компонентов */
+  --header-height: 60px;
+  --sidebar-width: 240px;
+  --sidebar-width-collapsed: 60px;
+  --footer-height: 40px;
+}
+
+/* Темная тема */
+[data-theme="dark"] {
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e1e;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: #f8f9fa;
+  --text-secondary: #adb5bd;
+  --text-tertiary: #6c757d;
+  --border-color: #444444;
+  --accent-color: #3d8bfd;
+  --accent-hover: #5a9cfd;
+  --success-color: #28a745;
+  --warning-color: #ffc107;
+  --danger-color: #dc3545;
+  --info-color: #17a2b8;
+  
+  /* Тени для темной темы */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+}
+
+/* Переменные для анимаций */
+:root {
+  --animation-slide-in: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --animation-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  --animation-elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+}
+# Основные типы APP
+/* Импорт файла переменных темы */
+@import './variables.css';
+
+/* Сброс стилей */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  min-height: 100vh;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-container {
+  display: flex;
+  flex: 1;
+}
+
+.app-content {
+  flex: 1;
+  padding: 20px;
+  margin-left: var(--sidebar-width);
+  transition: margin-left var(--transition-normal);
+}
+
+.sidebar.collapsed ~ .app-content {
+  margin-left: var(--sidebar-width-collapsed);
+}
+
+/* Стили для заголовков */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  margin-bottom: 0.5em;
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.75rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+}
+
+/* Стили для ссылок */
+a {
+  color: var(--accent-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* Стили для кнопок */
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius-md);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.btn:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-primary {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-success {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: var(--success-color);
+  filter: brightness(110%);
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: var(--danger-color);
+  filter: brightness(110%);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Стили для форм */
+form {
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+
+/* Стили для загрузчика */
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+/* Стили для сообщений об ошибках */
+.error-message {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--danger-color);
+  padding: 0.75rem;
+  border-radius: var(--border-radius-md);
+  margin-bottom: 1rem;
+  animation: slideIn var(--transition-normal) var(--animation-slide-in);
+}
+
+/* Стили для карточек */
+.card {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .app-content {
+    margin-left: 0;
+    padding: 10px;
+  }
+  
+  .sidebar {
+    position: fixed;
+    z-index: 1000;
+    transform: translateX(-100%);
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .sidebar.collapsed ~ .app-content {
+    margin-left: 0;
+  }
+}
+
+/* Анимации */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+# Стили переключатели темы
+.theme-toggle {
+  display: inline-block;
+  cursor: pointer;
+  user-select: none;
+  margin-right: 15px;
+}
+
+.toggle-track {
+  width: 48px;
+  height: 24px;
+  border-radius: 30px;
+  background-color: #cbd5e0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  transition: background-color 0.3s ease;
+}
+
+.toggle-thumb {
+  position: absolute;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, background-color 0.3s ease;
+}
+
+.toggle-icon {
+  color: #ffffff;
+  font-size: 12px;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+}
+
+.toggle-icon.sun {
+  color: #f6ad55;
+  margin-left: 2px;
+}
+
+.toggle-icon.moon {
+  color: #a0aec0;
+  margin-right: 2px;
+}
+
+/* Темная тема */
+[data-theme="dark"] .toggle-track {
+  background-color: #2d3748;
+}
+
+[data-theme="dark"] .toggle-thumb {
+  background-color: #1a202c;
+  transform: translateX(24px);
+}
+
+[data-theme="dark"] .toggle-icon.sun {
+  opacity: 0.2;
+}
+
+[data-theme="dark"] .toggle-icon.moon {
+  opacity: 1;
+}
+
+/* Анимация при наведении */
+.theme-toggle:hover .toggle-track {
+  filter: brightness(1.1);
+}
+
+.theme-toggle:hover .toggle-thumb {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+/* Анимация при нажатии */
+.theme-toggle:active .toggle-thumb {
+  transform: scale(0.95) translateX(24px);
+}
+
+## 7. React - Полный план проекта
+
+Итак, вот полный план разработки программы автоматизированного составления графика отпусков:
+
+### Базы данных
+1. **Схема MySQL** - создана с необходимыми таблицами для хранения пользователей, подразделений, заявок на отпуск и их статусов.
+
+### Backend (Go)
+1. **Структура приложения** - разделена на модули для улучшения организации кода.
+2. **Модели данных** - определены для работы с данными из БД.
+3. **Сервисы** - реализована бизнес-логика для работы с отпусками, включая:
+   - Валидацию заявок
+   - Проверку пересечений отпусков
+   - Уведомления руководителей
+4. **Обработчики HTTP** - созданы для обработки API запросов.
+5. **Основная точка входа** - настроены маршруты и middleware.
+
+### Frontend (React)
+1. **Структура приложения** - организована по компонентам, страницам и контекстам.
+2. **API-клиенты** - для взаимодействия с бэкендом.
+3. **Контексты** - для управления темой и данными пользователя.
+4. **Компоненты интерфейса**:
+   - Header с навигацией и профилем пользователя
+   - Sidebar для навигации
+   - Формы для создания заявок на отпуск
+   - Дашборд руководителя для просмотра и управления заявками
+5. **Стили** - CSS с поддержкой светлой и темной темы.
+6. **Анимации** - используется Framer Motion для плавных переходов.
+
+### Ключевые функции приложения
+1. **Создание заявок на отпуск** с автоматической проверкой условий:
+   - Одна из частей отпуска должна быть не менее 14 дней
+   - Общая длительность не должна превышать доступный лимит дней
+2. **Отправка заявок руководителю** после выполнения всех условий
+3. **Проверка пересечений отпусков** в подразделении
+4. **Уведомления руководителя** о пересечениях
+5. **Календарь отпусков** для визуализации графика
+6. **Поддержка разных ролей пользователей**:
+   - Обычные сотрудники
+   - Руководители
+   - Администраторы
+7. **Адаптивный дизайн** с поддержкой мобильных устройств
+8. **Темная и светлая тема** с плавным переключением
+
+### Технические особенности
+1. **Аутентификация** через JWT токены
+2. **Защищенные маршруты** на фронтенде и бэкенде
+3. **Валидация данных** на стороне клиента и сервера
+4. **Плавные анимации** с использованием Framer Motion
+5. **Адаптивный дизайн** с учетом разных устройств
+6. **Контекстное управление состоянием** приложения
+
+## Дополнительные рекомендации по внедрению
+
+1. **Тестирование**:
+   - Юнит-тесты для бэкенда и фронтенда
+   - Интеграционные тесты для API
+   - UI-тесты для основных пользовательских сценариев
+
+2. **Развертывание**:
+   - Настроить Docker для контейнеризации приложения
+   - Создать CI/CD пайплайн для автоматического развертывания
+
+3. **Мониторинг**:
+   - Добавить логирование на бэкенде
+   - Настроить мониторинг производительности
+
+4. **Дополнительные улучшения**:
+   - Экспорт графика отпусков в Excel или PDF
+   - Интеграция с корпоративным календарем
+   - Уведомления по электронной почте
+
+Этот план покрывает все требования задания, включая функциональные возможности (автоматизированное составление графика отпусков, проверка условий, определение пересечений) и технические требования (MySQL, React, Go, красивый интерфейс, темная/светлая темы, анимации).
