@@ -159,15 +159,22 @@ func (s *VacationService) ValidateVacationRequest(request *models.VacationReques
 	log.Printf("[Validation Check] UserID: %d, Year: %d, TotalDaysLimit: %d, UsedDaysLimit: %d, CalculatedAvailable: %d, DaysRequestedInThisRequest: %d",
 		request.UserID, request.Year, limit.TotalDays, limit.UsedDays, availableDays, totalDays)
 
-	// Возвращено: Стандартная проверка, что запрошенные дни НЕ ПРЕВЫШАЮТ доступные
-	if totalDays > availableDays {
+	// НОВАЯ ПРОВЕРКА: Запрошенные дни должны ТОЧНО соответствовать доступным дням
+	if totalDays != availableDays {
 		// LOGGING: Log the failure reason
-		log.Printf("[Validation Failed] UserID: %d, Year: %d - Limit exceeded: available %d, requested %d",
+		log.Printf("[Validation Failed] UserID: %d, Year: %d - Days mismatch: available %d, requested %d",
 			request.UserID, request.Year, availableDays, totalDays)
-		return fmt.Errorf("превышен доступный лимит дней отпуска: доступно %d, запрошено %d", availableDays, totalDays)
+		return fmt.Errorf("необходимо использовать все доступные дни отпуска: доступно %d, запрошено %d", availableDays, totalDays)
 	}
 
-	log.Printf("[Validation OK] UserID: %d, Year: %d - Limit check passed: available %d, requested %d",
+	// Старая проверка (на всякий случай, хотя новая её покрывает)
+	// if totalDays > availableDays {
+	//  log.Printf("[Validation Failed] UserID: %d, Year: %d - Limit exceeded: available %d, requested %d",
+	//   request.UserID, request.Year, availableDays, totalDays)
+	//  return fmt.Errorf("превышен доступный лимит дней отпуска: доступно %d, запрошено %d", availableDays, totalDays)
+	// }
+
+	log.Printf("[Validation OK] UserID: %d, Year: %d - Exact days match passed: available %d, requested %d",
 		request.UserID, request.Year, availableDays, totalDays) // LOGGING
 	return nil // Все проверки пройдены
 }

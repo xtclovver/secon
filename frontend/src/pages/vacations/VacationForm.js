@@ -120,8 +120,14 @@ const VacationForm = () => {
             currentErrors.longPeriod = 'Одна из частей отпуска должна быть не менее 14 календарных дней.';
         }
         // Используем currentLimit и currentUsedDays из контекста для проверки лимита
-        if (totalRequested > (currentLimit - currentUsedDays)) {
-            currentErrors.limit = `Превышен доступный лимит дней отпуска (${currentLimit - currentUsedDays} дн.).`;
+        const availableDays = currentLimit - currentUsedDays;
+        if (totalRequested > availableDays) {
+            currentErrors.limit = `Превышен доступный лимит дней отпуска (${availableDays} дн.).`;
+        }
+
+        // НОВАЯ ПРОВЕРКА: Точное соответствие доступным дням
+        if (totalRequested !== availableDays && totalRequested > 0) { // Проверяем только если дни запрошены
+             currentErrors.exactDays = `Необходимо использовать все доступные дни отпуска (${availableDays} дн.). Запрошено: ${totalRequested} дн.`;
         }
     }
     
@@ -256,6 +262,8 @@ const VacationForm = () => {
       {/* Убран console.log из рендера */}
       {errors.longPeriod ? <div className="error-message">{errors.longPeriod}</div> : null} 
       {errors.limit && <div className="error-message">{errors.limit}</div>}
+      {/* НОВОЕ: Отображение ошибки точного соответствия дней */}
+      {errors.exactDays && <div className="error-message">{errors.exactDays}</div>}
       
       {/* Форма теперь вызывает handleSubmit при отправке */}
       <form onSubmit={handleSubmit}> 
