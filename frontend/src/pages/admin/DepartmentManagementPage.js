@@ -312,11 +312,11 @@ const DepartmentManagementPage = () => {
         </div>
       )}
 
-      {/* TODO: Добавить кнопку "Создать юнит/пользователя" */}
-
-      {/* Старый блок отображения смешанного списка удален */}
+      {/* TODO: Добавить кнопки "Создать юнит", "Добавить пользователя" */}
+      {/* Можно разместить их в controls-section или отдельном блоке */}
+      {/* </div> */} {/* Закрытие main-content-wrapper, если используется */}
     </div>
   );
 };
 
-export default DepartmentManagementPage; // <-- Добавляем экспорт в самый конец
+export default DepartmentManagementPage;

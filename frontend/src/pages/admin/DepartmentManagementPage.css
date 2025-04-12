@@ -1,159 +1,368 @@
+/* --- Общие стили страницы --- */
 .department-management-page {
-  padding: 20px;
-  background-color: var(--background-color); /* Используем переменные темы */
+  padding: 25px; /* Немного увеличим отступы */
+  background-color: var(--bg-primary); /* Используем переменную фона страницы */
   color: var(--text-color);
-  max-width: 900px;
-  margin: 20px auto;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 1000px; /* Можно немного увеличить ширину */
+  margin: 30px auto;
+  border-radius: var(--border-radius-lg); /* Используем переменную */
+  box-shadow: var(--shadow-md); /* Используем переменную */
+  transition: background-color var(--transition-normal), color var(--transition-normal); /* Уточняем переходы */
 }
 
 .department-management-page h1 {
-  color: var(--primary-color);
-  margin-bottom: 25px;
-  border-bottom: 2px solid var(--secondary-color);
-  padding-bottom: 10px;
+  color: var(--accent-color); /* Используем акцентный цвет */
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color); /* Тонкая линия */
+  font-size: 1.8em;
 }
 
-/* Стили для хлебных крошек */
+.department-management-page h2 {
+    margin-top: 30px;
+    margin-bottom: 15px;
+    color: var(--text-secondary); /* Вторичный цвет для подзаголовков */
+    font-size: 1.4em;
+}
+
+/* --- Стили для хлебных крошек --- */
 .breadcrumbs {
   list-style: none;
-  padding: 0 0 20px 0;
-  margin: 0;
+  padding: 0 0 15px 0;
+  margin: 0 0 25px 0;
   display: flex;
-  flex-wrap: wrap; /* Перенос на новую строку при необходимости */
+  flex-wrap: wrap;
   align-items: center;
-  font-size: 0.95em;
+  font-size: 1em;
   border-bottom: 1px solid var(--border-color);
-  margin-bottom: 20px;
 }
 
 .breadcrumb-item {
-  display: inline-flex; /* Чтобы элементы были в строку */
+  display: inline-flex;
   align-items: center;
+  opacity: 0;
+  animation: fadeIn 0.5s ease forwards;
+}
+.breadcrumb-item:not(:first-child) {
+    animation-delay: 0.1s;
 }
 
 .breadcrumb-item::after {
-  content: '/';
-  margin: 0 8px;
-  color: var(--secondary-text-color);
+  content: '>'; /* Используем '>', выглядит современнее */
+  margin: 0 10px;
+  color: var(--text-secondary); /* Используем переменную */
+  opacity: 0.7;
 }
 
 .breadcrumb-item:last-child::after {
-  content: ''; /* Убираем слэш у последнего элемента */
+  content: '';
   margin: 0;
 }
 
 .breadcrumb-link {
   background: none;
   border: none;
-  color: var(--link-color);
+  color: var(--accent-color); /* Используем акцентный цвет */
   text-decoration: none;
   cursor: pointer;
-  padding: 0;
-  font-size: inherit; /* Наследуем размер шрифта */
+  padding: 2px 4px;
+  font-size: inherit;
+  border-radius: var(--border-radius-sm); /* Используем переменную */
+  transition: color var(--transition-fast), background-color var(--transition-fast); /* Используем переменные */
 }
 
 .breadcrumb-link:hover {
-  text-decoration: underline;
-  color: var(--link-hover-color);
+  text-decoration: none;
+  color: var(--accent-hover);
+  background-color: color-mix(in srgb, var(--accent-color) 10%, transparent); /* Легкий фон при наведении */
 }
 
 .breadcrumb-item.active span {
-  color: var(--text-color);
+  color: var(--text-primary); /* Используем переменную */
   font-weight: bold;
 }
 
-/* Стили для списка */
+/* --- Стили для списков и карточек --- */
 .items-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.list-item {
+/* Общие стили для карточек (заменяют .list-item) */
+.list-item--unit,
+.list-item--user {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  margin-bottom: 10px;
-  background-color: var(--card-bg-color); /* Фон плитки */
+  padding: 18px 22px;
+  margin-bottom: 12px;
+  background-color: var(--bg-secondary); /* Фон карточек */
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  transition: box-shadow 0.2s ease-in-out;
+  border-radius: var(--border-radius-md); /* Используем переменную */
+  box-shadow: var(--shadow-sm); /* Используем переменную */
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast); /* Используем переменные */
+  opacity: 0;
+  animation: slideUpFadeIn 0.4s ease-out forwards;
 }
 
-.list-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+/* Анимация появления */
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Задержка анимации для элементов списка */
+.items-list li:nth-child(1) { animation-delay: 0.05s; }
+.items-list li:nth-child(2) { animation-delay: 0.1s; }
+.items-list li:nth-child(3) { animation-delay: 0.15s; }
+/* ... можно добавить больше правил */
+
+.list-item--unit:hover,
+.list-item--user:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md); /* Используем переменную */
 }
 
 .item-info {
   flex-grow: 1;
-  margin-right: 15px;
+  margin-right: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-info strong {
-  font-size: 1.1em;
+  font-size: 1.15em;
+  color: var(--text-primary); /* Основной цвет текста */
+}
+.item-info span { /* Для типа юнита или должности */
+    display: block;
+    font-size: 0.9em;
+    color: var(--text-secondary); /* Используем переменную */
+    margin-top: 3px;
+}
+
+
+.item-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
 }
 
 .item-actions button {
-  padding: 8px 15px;
+  padding: 9px 18px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--border-radius-sm); /* Используем переменную */
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.2s ease, transform 0.1s ease;
-  margin-left: 10px; /* Небольшой отступ между кнопками, если их будет несколько */
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast); /* Используем переменные */
+  margin-left: 10px;
 }
 
-.navigate-button {
-  background-color: var(--primary-color);
-  color: white;
+/* -- Стили для инпута лимита -- */
+.limit-input {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--input-background-color, var(--bg-tertiary));
+    color: var(--text-color);
+    width: 70px;
+    text-align: center;
+    font-size: 1em;
+    transition: border-color var(--transition-fast), outline var(--transition-fast);
+    margin-right: 10px;
 }
 
-.navigate-button:hover {
-  background-color: var(--primary-hover-color);
-  transform: translateY(-1px);
+.limit-input:focus {
+    outline: 2px solid var(--accent-color); /* Используем outline */
+    outline-offset: 1px;
+    border-color: var(--accent-color);
 }
 
-.manage-button {
-  background-color: var(--secondary-color);
-  color: white;
+.limit-input:disabled {
+     background-color: var(--bg-tertiary);
+     color: var(--text-tertiary);
+     cursor: not-allowed;
+     border-color: var(--border-color);
+     outline: none;
 }
 
-.manage-button:hover {
-  background-color: var(--secondary-hover-color);
-  transform: translateY(-1px);
+
+/* --- Стили для селектора года --- */
+.year-selector {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
+.year-selector label {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.year-selector select {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--input-background-color, var(--bg-tertiary));
+    color: var(--text-color);
+    font-size: 1em;
+    cursor: pointer;
+    transition: border-color var(--transition-fast), outline var(--transition-fast);
+}
+
+.year-selector select:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 1px;
+    border-color: var(--accent-color);
+}
+
+/* -- Стили кнопок действий -- */
+.navigate-button,
+.save-button {
+  background-color: var(--accent-color);
+  color: #fff;
+  box-shadow: var(--shadow-sm); /* Добавим небольшую тень */
+}
+
+.navigate-button:hover:not(:disabled),
+.save-button:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md); /* Усилим тень */
+}
+
+.navigate-button:active:not(:disabled),
+.save-button:active:not(:disabled) {
+    transform: translateY(0px);
+    box-shadow: var(--shadow-sm);
+}
+
+.save-button.success {
+    background-color: var(--success-color);
+    color: #fff;
+}
+.save-button.success:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--success-color) 85%, black); /* Немного темнее */
+}
+
+.item-actions button:disabled {
+    background-color: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+.item-actions button:disabled:hover {
+    background-color: var(--bg-tertiary);
+    transform: none;
+    box-shadow: none;
+}
+
+/* --- Сообщения об ошибках --- */
 .error-message {
-  color: var(--error-color);
-  background-color: var(--error-bg-color);
-  padding: 10px 15px;
-  border-radius: 4px;
-  border: 1px solid var(--error-color);
+  color: var(--danger-color);
+  background-color: color-mix(in srgb, var(--danger-color) 15%, var(--bg-secondary)); /* Фон с прозрачностью */
+  padding: 12px 18px;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger-color) 40%, var(--bg-secondary)); /* Рамка с прозрачностью */
+  margin-top: 10px;
+  margin-bottom: 15px;
+  font-size: 0.95em;
+  animation: fadeIn 0.3s ease;
 }
 
-/* Адаптивность (пример) */
-@media (max-width: 600px) {
-  .list-item {
+.save-error { /* Ошибка рядом с кнопкой сохранения */
+    font-size: 0.85em;
+    color: var(--danger-color);
+    margin-left: 10px;
+    background-color: transparent; /* Без фона */
+    padding: 0;
+    border: none;
+    animation: fadeIn 0.3s ease;
+}
+
+
+/* --- Адаптивность --- */
+@media (max-width: 768px) {
+  .department-management-page {
+      padding: 15px;
+  }
+
+  .list-item--unit,
+  .list-item--user {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    padding: 15px;
+  }
+
+  .item-info {
+      margin-right: 0;
+      margin-bottom: 10px;
   }
 
   .item-actions {
     margin-top: 10px;
     width: 100%;
     display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
+   .item-actions--limit { /* Для блока с лимитом */
+       flex-direction: row;
+       justify-content: space-between;
+       align-items: center;
+   }
 
   .item-actions button {
-    flex-grow: 1; /* Кнопки занимают всю ширину */
+    width: 100%;
     margin-left: 0;
-    margin-top: 5px;
   }
+  /* В мобильной версии сделаем кнопки в блоке лимита поровну */
+   .item-actions--limit .limit-input {
+       width: auto;
+       flex-grow: 1;
+       margin-right: 8px;
+   }
+   .item-actions--limit .save-button {
+       flex-shrink: 0; /* Кнопка не сжимается */
+       padding-left: 15px; /* Чуть больше места для кнопки */
+       padding-right: 15px;
+   }
+}
+@media (max-width: 480px) {
+     .department-management-page h1 {
+         font-size: 1.5em; /* Уменьшаем заголовок на совсем маленьких экранах */
+     }
+     .department-management-page h2 {
+         font-size: 1.2em;
+     }
+     .breadcrumb-item::after {
+         margin: 0 5px; /* Уменьшаем отступы в крошках */
+     }
+     .item-actions button {
+         padding: 8px 12px; /* Уменьшаем паддинг кнопок */
+     }
+     .item-actions--limit {
+        flex-direction: column; /* На совсем маленьких ставим инпут и кнопку друг под другом */
+        align-items: stretch;
+     }
+      .limit-input {
+         margin-right: 0;
+         margin-bottom: 8px; /* Добавляем отступ снизу */
+         width: 100%; /* Инпут на всю ширину */
+     }
+}
 
-  .item-actions button:first-child {
-     margin-top: 0;
-  }
+/* --- Дополнительные общие анимации --- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
