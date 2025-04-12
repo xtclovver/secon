@@ -281,3 +281,48 @@ INSERT INTO users (login, password, full_name, organizational_unit_id, position_
     FALSE,
     FALSE
 );
+
+-- Добавление тестовых пользователей
+-- engineer1:pass1 (Инженер II категории, Отдел эксплуатации систем учета электроэнергии)
+INSERT INTO users (login, password, full_name, organizational_unit_id, position_id, is_admin, is_manager) VALUES (
+    'engineer1',
+    '$2a$10$rXE73alkViRm7WmE7ZPzKO/NstyTJz/XUx1Qiz6dIv1U8FxjT7mUC',
+    'Инженеров Инженер Инженерович',
+    26, -- Отдел эксплуатации систем учета электроэнергии (id=26)
+    (SELECT id FROM positions WHERE name = 'Инженер II категории'),
+    FALSE,
+    FALSE
+);
+
+-- engineer2:pass2 (Инженер II категории, Отдел эксплуатации инфраструктуры информационных технологий)
+INSERT INTO users (login, password, full_name, organizational_unit_id, position_id, is_admin, is_manager) VALUES (
+    'engineer2',
+    '$2a$10$XlN.IvGotygmEXjsMxilP.L0SO1lKKcAXMTlNrBCt3v5X5hYeLkSG',
+    'Техников Техник Техникович',
+    32, -- Отдел эксплуатации инфраструктуры информационных технологий (id=32)
+    (SELECT id FROM positions WHERE name = 'Инженер II категории'),
+    FALSE,
+    FALSE
+);
+
+-- leadspec1:pass3 (Ведущий специалист, Отдел договорной работы с юридическими лицами)
+INSERT INTO users (login, password, full_name, organizational_unit_id, position_id, is_admin, is_manager) VALUES (
+    'leadspec1',
+    '$2a$10$mLkfJ4yJ6U9C2xVCvaOSW.hBuLOQl/k2aGBto7XFSc0v9GpN/45WW',
+    'Специалистов Специалист Специалистович',
+    38, -- Отдел договорной работы с юридическими лицами (id=38)
+    (SELECT id FROM positions WHERE name = 'Ведущий специалист'),
+    FALSE,
+    FALSE
+);
+
+-- sectorhead1:pass4 (Начальник сектора, Сектор учета активов, доходов и затрат общества)
+INSERT INTO users (login, password, full_name, organizational_unit_id, position_id, is_admin, is_manager) VALUES (
+    'sectorhead1',
+    '$2a$10$zl.NjI59qN6bUI.mOIVpg.3tFEkM2gg7Z1YnXFXcW6MEfDLZ2GlGy',
+    'Секторов Начальник Секторович',
+    14, -- Сектор учета активов, доходов и затрат общества (id=14)
+    (SELECT id FROM positions WHERE name = 'Начальник сектора'),
+    FALSE,
+    TRUE
+);

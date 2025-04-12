@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	passwords := []string{"admin", "manager", "user"} // Ваши пароли
+	passwords := []string{"admin", "manager", "user", "pass1", "pass2", "pass3", "pass4"} // Ваши пароли
 
 	for _, pass := range passwords {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
