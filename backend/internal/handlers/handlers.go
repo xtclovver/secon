@@ -102,7 +102,6 @@ func (h *AppHandler) SetVacationLimit(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Лимит отпуска успешно установлен"})
 }
 
-
 // CreateVacationRequest обработчик для создания заявки на отпуск
 func (h *AppHandler) CreateVacationRequest(c *gin.Context) {
 	var request models.VacationRequest
@@ -119,7 +118,7 @@ func (h *AppHandler) CreateVacationRequest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Ошибка чтения данных: " + err.Error()})
 		return
 	}
-	
+
 	// Логируем распарсенный запрос
 	log.Printf("Распарсенный запрос CreateVacationRequest (encoding/json): %+v", request)
 	for i, p := range request.Periods {
@@ -312,7 +311,6 @@ func (h *AppHandler) GetAllVacations(c *gin.Context) {
 	c.JSON(http.StatusOK, vacations)
 }
 
-
 // CancelVacationRequest обработчик для отмены заявки (пользователем, менеджером, админом)
 func (h *AppHandler) CancelVacationRequest(c *gin.Context) {
 	requestIDStr := c.Param("id")
@@ -431,7 +429,6 @@ func (h *AppHandler) RejectVacationRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Заявка успешно отклонена"})
 }
 
-
 // GetAllUsersWithLimits обработчик для получения списка пользователей с лимитами (для админа)
 func (h *AppHandler) GetAllUsersWithLimits(c *gin.Context) {
 	// Проверяем права администратора
@@ -462,7 +459,6 @@ func (h *AppHandler) GetAllUsersWithLimits(c *gin.Context) {
 
 	c.JSON(http.StatusOK, users)
 }
-
 
 // AuthHandler - структура для обработчиков аутентификации (добавлено для main.go)
 type AuthHandler struct {
@@ -503,4 +499,48 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		"token": token,
 		"user":  user, // Убедитесь, что пароль удален в сервисе перед возвратом
 	})
+}
+
+// Register - обработчик для регистрации нового пользователя
+func (h *AuthHandler) Register(c *gin.Context) {
+	var input struct {
+		Username        string `json:"username" binding:"required"`
+		Password        string `json:"password" binding:"required"`
+		ConfirmPassword string `json:"confirm_password" binding:"required"`
+		FullName        string `json:"full_name" binding:"required"`
+		Email           string `json:"email" binding:"required,email"`
+		PositionID      *int   `json:"position_id"` // Должность опциональна при регистрации? Или required? Пока опционально.
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные: " + err.Error()})
+		return
+	}
+
+	// Проверка совпадения паролей
+	if input.Password != input.ConfirmPassword {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Пароли не совпадают"})
+		return
+	}
+
+	// Вызов сервиса регистрации
+	user, err := h.authService.Register(input.Username, input.Password, input.FullName, input.Email, input.PositionID)
+	if err != nil {
+		// Обработка ошибок сервиса (например, пользователь уже существует)
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()}) // Используем 409 Conflict для дубликата
+		return
+	}
+
+	// Возвращаем созданного пользователя (без пароля)
+	c.JSON(http.StatusCreated, user)
+}
+
+// GetPositions - обработчик для получения списка должностей
+func (h *AppHandler) GetPositions(c *gin.Context) {
+	positions, err := h.userService.GetAllPositionsGrouped()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения списка должностей: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, positions)
 }

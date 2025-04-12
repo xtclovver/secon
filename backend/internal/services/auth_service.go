@@ -2,25 +2,27 @@ package services
 
 import (
 	"errors"
+	"fmt"  // Добавлен для форматирования ошибок
 	"time" // Раскомментирован для генерации JWT
 
-	"vacation-scheduler/internal/models" 
+	"vacation-scheduler/internal/models"
 	"vacation-scheduler/internal/repositories" // Импортируем репозиторий
 
 	"github.com/golang-jwt/jwt/v5" // Раскомментирован для генерации JWT
-	"golang.org/x/crypto/bcrypt" // Раскомментирован для проверки пароля
+	"golang.org/x/crypto/bcrypt"   // Раскомментирован для проверки пароля
 )
 
 // AuthService предоставляет методы для аутентификации пользователей
 type AuthService struct {
-	userRepo *repositories.UserRepository // Зависимость от репозитория пользователей
-	jwtSecret string                     // Секрет для JWT
+	userRepo  repositories.UserRepositoryInterface // Используем интерфейс
+	jwtSecret string                               // Секрет для JWT
 }
 
 // NewAuthService создает новый экземпляр AuthService
-func NewAuthService(userRepo *repositories.UserRepository, jwtSecret string) *AuthService {
+// Принимаем интерфейс, а не конкретную реализацию
+func NewAuthService(userRepo repositories.UserRepositoryInterface, jwtSecret string) *AuthService {
 	return &AuthService{
-		userRepo: userRepo,
+		userRepo:  userRepo,
 		jwtSecret: jwtSecret,
 	}
 }
@@ -45,7 +47,7 @@ func (s *AuthService) Login(username, password string) (string, *models.User, er
 	// 	// Пароль не совпадает
 	// 	return "", nil, errors.New("неверное имя пользователя или пароль")
 	// }
-	
+
 	// Сравниваем хеш пароля из БД с предоставленным паролем
 	// Примечание: user.Password должен содержать хеш из БД (репозиторий-заглушка должен это имитировать)
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
@@ -53,7 +55,6 @@ func (s *AuthService) Login(username, password string) (string, *models.User, er
 		// Пароль не совпадает или другая ошибка bcrypt
 		return "", nil, errors.New("неверное имя пользователя или пароль")
 	}
-
 
 	// 3. Сгенерировать JWT токен
 	claims := jwt.MapClaims{
@@ -123,4 +124,37 @@ func (s *AuthService) ValidateToken(tokenString string) (*models.User, error) {
 	}
 
 	return nil, errors.New("невалидный токен")
+}
+
+// Register создает нового пользователя
+func (s *AuthService) Register(username, password, fullName, email string, positionID *int) (*models.User, error) {
+	// 1. Проверить, существует ли пользователь с таким именем
+	existingUser, err := s.userRepo.FindByUsername(username)
+	if err != nil {
+		// Ошибка при запросе к БД
+		return nil, fmt.Errorf("ошибка проверки существующего пользователя: %w", err)
+	}
+	if existingUser != nil {
+		return nil, errors.New("пользователь с таким именем уже существует")
+	}
+
+	// 2. Создать объект пользователя
+	newUser := &models.User{
+		Username:   username,
+		Password:   password, // Пароль будет хеширован в репозитории
+		FullName:   fullName,
+		Email:      email,
+		PositionID: positionID, // Устанавливаем ID должности
+		IsAdmin:    false,      // По умолчанию не админ
+		IsManager:  false,      // По умолчанию не менеджер
+	}
+
+	// 3. Вызвать метод репозитория для создания пользователя
+	err = s.userRepo.CreateUser(newUser)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка создания пользователя в сервисе: %w", err)
+	}
+
+	// Пароль уже очищен в репозитории после создания
+	return newUser, nil
 }

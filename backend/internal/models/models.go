@@ -89,10 +89,26 @@ type User struct {
 	FullName     string    `json:"full_name" db:"full_name"`
 	Email        string    `json:"email" db:"email"`
 	DepartmentID *int      `json:"department_id" db:"department_id"`
+	PositionID   *int      `json:"position_id" db:"position_id"` // Добавлено поле для должности
 	IsAdmin      bool      `json:"is_admin" db:"is_admin"`
 	IsManager    bool      `json:"is_manager" db:"is_manager"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// PositionGroup - модель группы должностей
+type PositionGroup struct {
+	ID        int        `json:"id" db:"id"`
+	Name      string     `json:"name" db:"name"`
+	SortOrder int        `json:"sort_order" db:"sort_order"`
+	Positions []Position `json:"positions"` // Список должностей в этой группе
+}
+
+// Position - модель должности
+type Position struct {
+	ID      int    `json:"id" db:"id"`
+	Name    string `json:"name" db:"name"`
+	GroupID int    `json:"-" db:"group_id"` // Скрываем group_id в JSON, так как он будет в структуре группы
 }
 
 // Department - модель подразделения
@@ -186,6 +202,6 @@ type VacationRequestAdminView struct {
 	Comment      string           `json:"comment" db:"comment"`
 	CreatedAt    time.Time        `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time        `json:"updated_at" db:"updated_at"`
-	Periods      []VacationPeriod `json:"periods"` // Populated separately
+	Periods      []VacationPeriod `json:"periods"`    // Populated separately
 	TotalDays    int              `json:"total_days"` // Calculated total days across periods
 }

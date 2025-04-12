@@ -138,6 +138,10 @@ const LoginPage = () => {
             {loading ? 'Выполняется вход...' : 'Войти'}
           </motion.button>
         </form>
+        {/* Добавляем ссылку на регистрацию */}
+        <p className="register-link">
+          Нет аккаунта? <a href="/register">Зарегистрироваться</a>
+        </p>
       </motion.div>
     </motion.div>
   );
