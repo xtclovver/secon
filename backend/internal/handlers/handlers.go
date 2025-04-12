@@ -544,3 +544,66 @@ func (h *AppHandler) GetPositions(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, positions)
 }
+
+// UpdateUserProfile - обработчик для обновления профиля пользователя
+func (h *AppHandler) UpdateUserProfile(c *gin.Context) {
+	// Получаем ID целевого пользователя из URL
+	targetUserIDStr := c.Param("id")
+	targetUserID, err := strconv.Atoi(targetUserIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID пользователя"})
+		return
+	}
+
+	// Получаем данные запрашивающего пользователя из контекста (установленные middleware)
+	requestingUserIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	requestingUserID := requestingUserIDVal.(int)
+
+	isAdminVal, _ := c.Get("isAdmin")
+	isManagerVal, _ := c.Get("isManager")
+	isAdmin := isAdminVal.(bool)
+	isManager := isManagerVal.(bool)
+
+	// Создаем "фиктивного" пользователя для передачи в сервис (только с нужными полями для проверки прав)
+	requestingUser := &models.User{
+		ID:        requestingUserID,
+		IsAdmin:   isAdmin,
+		IsManager: isManager,
+	}
+
+	// Привязываем данные из тела запроса к DTO
+	var updateData models.UserUpdateDTO
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные для обновления: " + err.Error()})
+		return
+	}
+
+	// Вызываем сервис для обновления профиля
+	err = h.userService.UpdateUserProfile(requestingUser, targetUserID, &updateData)
+	if err != nil {
+		// Определяем тип ошибки и возвращаем соответствующий статус
+		statusCode := http.StatusInternalServerError
+		errMsg := "Ошибка обновления профиля: " + err.Error()
+
+		if strings.Contains(err.Error(), "недостаточно прав") {
+			statusCode = http.StatusForbidden
+		} else if strings.Contains(err.Error(), "не найден") {
+			statusCode = http.StatusNotFound
+		} else if strings.Contains(err.Error(), "не предоставлены") || strings.Contains(err.Error(), "нет допустимых полей") {
+			statusCode = http.StatusBadRequest
+		}
+		// Можно добавить обработку других специфических ошибок сервиса/репозитория
+
+		c.JSON(statusCode, gin.H{"error": errMsg})
+		return
+	}
+
+	// Возвращаем успешный ответ
+	// Можно вернуть обновленные данные пользователя, если сервис их возвращает,
+	// или просто сообщение об успехе.
+	c.JSON(http.StatusOK, gin.H{"message": "Профиль пользователя успешно обновлен"})
+}

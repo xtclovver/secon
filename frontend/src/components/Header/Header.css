@@ -179,7 +179,9 @@
   padding: 5px 0; /* Небольшие отступы сверху/снизу */
 }
 
-.menu-list li button {
+/* Стили для кнопок и ссылок в выпадающем меню */
+.menu-list li button,
+.menu-list li .menu-link {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -189,13 +191,16 @@
   font-size: 0.9rem;
   color: var(--text-primary);
   transition: background-color var(--transition-fast);
+  text-decoration: none; /* Убираем подчеркивание у ссылки */
 }
 
-.menu-list li button:hover {
+.menu-list li button:hover,
+.menu-list li .menu-link:hover {
   background-color: var(--bg-tertiary);
 }
 
-.menu-list li button svg {
+.menu-list li button svg,
+.menu-list li .menu-link svg {
   color: var(--text-secondary);
   font-size: 1rem;
 }

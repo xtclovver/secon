@@ -188,10 +188,17 @@ const Header = () => {
                       {/* Отображение ролей */}
                       {user?.isManager && <span className="user-role manager">Руководитель</span>}
                       {user?.isAdmin && <span className="user-role admin">Администратор</span>}
-                      {!user?.isManager && !user?.isAdmin && <span className="user-role">Сотрудник</span>}
+                     {!user?.isManager && !user?.isAdmin && <span className="user-role">Сотрудник</span>}
                     </div>
                   </div>
                   <ul className="menu-list">
+                    <li>
+                      {/* Добавляем ссылку на профиль */}
+                      <Link to="/profile" className="menu-link" onClick={() => setIsProfileOpen(false)}>
+                        <FaUser /> {/* Можно использовать другую иконку, если есть */}
+                        <span>Профиль</span>
+                      </Link>
+                    </li>
                     <li>
                       <button onClick={handleLogout} className="logout-button">
                         <FaSignOutAlt />

@@ -44,7 +44,40 @@ export const getUsersWithLimits = async (year) => {
   }
 };
 
+/**
+ * Обновляет профиль пользователя.
+ * @param {number} userId - ID пользователя для обновления.
+ * @param {object} updateData - Объект с полями для обновления (например, { full_name: "Новое Имя", password: "новый_пароль", position_id: 3 }).
+ *                               Поля, которые не нужно обновлять, не включаются в объект.
+ * @returns {Promise<object>} - Промис, который разрешается объектом с сообщением об успехе.
+ */
+export const updateUserProfile = async (userId, updateData) => {
+  try {
+    // Удаляем пустые или null значения из updateData, чтобы не отправлять их
+    const filteredData = Object.entries(updateData).reduce((acc, [key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+
+    // Если после фильтрации не осталось данных, не отправляем запрос
+    if (Object.keys(filteredData).length === 0) {
+      console.log("Нет данных для обновления профиля.");
+      return { message: "Нет данных для обновления." }; // Или можно выбросить ошибку
+    }
+
+
+    const response = await apiClient.put(`/users/${userId}`, filteredData);
+    return response.data; // Возвращаем ответ сервера (обычно сообщение об успехе)
+  } catch (error) {
+    console.error(`Ошибка при обновлении профиля пользователя ${userId}:`, error.response || error.message);
+    throw new Error(error.response?.data?.error || 'Не удалось обновить профиль пользователя');
+  }
+};
+
+
 // Можно добавить другие функции для работы с пользователями (CRUD и т.д.)
 // export const createUser = async (userData) => { ... };
-// export const updateUser = async (userId, userData) => { ... };
+// export const getUserById = async (userId) => { ... }; // Может понадобиться для страницы профиля
 // export const deleteUser = async (userId) => { ... };
