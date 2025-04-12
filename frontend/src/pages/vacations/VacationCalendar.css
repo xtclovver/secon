@@ -1,0 +1,214 @@
+/* Стили для компонента VacationCalendar с поддержкой тем */
+
+.vacation-calendar-container {
+  padding: 20px;
+  background-color: var(--bg-secondary); /* Фон контейнера */
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary); /* Цвет текста заголовка и др. */
+}
+
+.vacation-calendar-container h2 {
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px; /* Пространство между иконкой и текстом */
+}
+
+.vacation-calendar-container .controls {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+}
+
+.vacation-calendar-container .controls label {
+    margin-right: 5px;
+}
+
+.vacation-calendar-container .controls select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  background-color: var(--input-background-color);
+  color: var(--text-primary);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+}
+
+.vacation-calendar-container .controls select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Стилизация самого календаря (react-calendar) */
+.department-wide-calendar {
+  width: 100%;
+  border: none !important; /* Убираем стандартную рамку */
+  background-color: transparent; /* Прозрачный фон, чтобы фон контейнера был виден */
+  font-family: inherit; /* Наследуем шрифт */
+}
+
+/* Навигация (месяц, год, стрелки) */
+.department-wide-calendar .react-calendar__navigation {
+  display: flex;
+  height: 44px;
+  margin-bottom: 1em;
+  background-color: var(--bg-tertiary); /* Фон навигации */
+  border-radius: var(--border-radius-sm);
+}
+
+.department-wide-calendar .react-calendar__navigation button {
+  min-width: 44px;
+  background: none;
+  border: none;
+  color: var(--text-primary); /* Цвет кнопок навигации */
+  font-size: 1.1em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.department-wide-calendar .react-calendar__navigation button:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+  background-color: transparent;
+}
+
+.department-wide-calendar .react-calendar__navigation button:enabled:hover,
+.department-wide-calendar .react-calendar__navigation button:enabled:focus {
+  background-color: var(--border-color); /* Подсветка при наведении */
+}
+
+/* Заголовки дней недели (Пн, Вт, ...) */
+.department-wide-calendar .react-calendar__month-view__weekdays {
+  text-align: center;
+  font-weight: bold;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  color: var(--text-secondary); /* Цвет названий дней недели */
+  padding-bottom: 0.5em;
+}
+
+.department-wide-calendar .react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none; /* Убираем подчеркивание */
+}
+
+/* Ячейки дней */
+.department-wide-calendar .react-calendar__tile {
+  max-width: 100%;
+  padding: 0.75em 0.5em;
+  background: none;
+  text-align: center;
+  line-height: 16px;
+  border: 1px solid transparent; /* Прозрачная рамка для выравнивания */
+  color: var(--text-primary); /* Цвет цифр дат */
+  cursor: pointer;
+  height: 90px; /* Задаем высоту ячейки */
+  display: flex; /* Для позиционирования маркера */
+  flex-direction: column;
+  justify-content: flex-start; /* Число сверху */
+  align-items: center;
+  position: relative; /* Для позиционирования маркера */
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+  border-radius: var(--border-radius-sm);
+}
+
+/* Убираем стандартный фон соседних месяцев */
+.department-wide-calendar .react-calendar__month-view__days__day--neighboringMonth {
+  color: var(--text-tertiary); /* Делаем числа соседних месяцев тусклее */
+  background-color: transparent;
+}
+
+/* Текущий день */
+.department-wide-calendar .react-calendar__tile--now {
+  background-color: var(--bg-tertiary); /* Фон текущего дня */
+  font-weight: bold;
+}
+.department-wide-calendar .react-calendar__tile--now:enabled:hover,
+.department-wide-calendar .react-calendar__tile--now:enabled:focus {
+  background-color: var(--border-color);
+}
+
+
+/* Выбранный день (если используется выбор) */
+.department-wide-calendar .react-calendar__tile--active {
+  background-color: var(--accent-color);
+  color: white; /* Текст на активном элементе */
+}
+.department-wide-calendar .react-calendar__tile--active:enabled:hover,
+.department-wide-calendar .react-calendar__tile--active:enabled:focus {
+  background-color: var(--accent-hover);
+}
+
+/* При наведении на день */
+.department-wide-calendar .react-calendar__tile:enabled:hover,
+.department-wide-calendar .react-calendar__tile:enabled:focus {
+  background-color: var(--bg-tertiary);
+}
+
+/* Стили для дней с отпусками */
+.department-wide-calendar .department-vacation-date {
+  background-color: rgba(var(--info-rgb, 13, 202, 240), 0.15) !important; /* Легкий фон - используем переменную, если есть, иначе fallback */
+  border: 1px dashed rgba(var(--info-rgb, 13, 202, 240), 0.3); /* Пунктирная рамка */
+}
+/* Для лучшего контраста info-color, зададим ее в RGB для rgba */
+:root { --info-rgb: 13, 202, 240; }
+[data-theme="dark"] { --info-rgb: 52, 211, 235; }
+
+
+/* Текущий день + отпуск */
+.department-wide-calendar .react-calendar__tile--now.department-vacation-date {
+  background-color: rgba(var(--info-rgb, 13, 202, 240), 0.3) !important; /* Более насыщенный фон */
+  border: 1px solid rgba(var(--info-rgb, 13, 202, 240), 0.5);
+}
+
+/* Маркер отпуска */
+.calendar-marker {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex; /* Используем inline-flex */
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  padding: 1px 4px; /* Немного увеличим padding */
+  border-radius: var(--border-radius-sm);
+  color: var(--bg-secondary); /* Белый текст на темном фоне, темный на светлом */
+  background-color: var(--info-color); /* Используем info цвет темы */
+  white-space: nowrap; /* Предотвращаем перенос текста в маркере */
+  z-index: 1; /* Чтобы был поверх фона */
+}
+
+/* Легенда */
+.calendar-legend {
+  margin-top: 15px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 15px;
+}
+
+.calendar-legend span:last-child {
+  margin-right: 0;
+}
+
+.calendar-legend .legend-color-box {
+  width: 15px;
+  height: 15px;
+  margin-right: 5px;
+  border-radius: 3px;
+  /* Используем тот же цвет фона, что и для дней отпуска */
+  background-color: rgba(var(--info-rgb, 13, 202, 240), 0.3);
+  border: 1px solid rgba(var(--info-rgb, 13, 202, 240), 0.5);
+}
