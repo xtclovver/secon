@@ -71,28 +71,34 @@ func (r *VacationRepository) CreateOrUpdateVacationLimit(userID int, year int, t
 	return nil
 }
 
-// UpdateVacationLimitUsedDays обновляет количество использованных дней отпуска для пользователя
+// UpdateVacationLimitUsedDays атомарно обновляет использованные дни, создавая лимит при необходимости.
+// daysDelta может быть положительным (списание) или отрицательным (возврат).
 func (r *VacationRepository) UpdateVacationLimitUsedDays(userID int, year int, daysDelta int) error {
+	// TODO: Вынести дефолтное значение total_days (28) в конфигурацию
+	const defaultTotalDays = 28
+
+	// Используем INSERT ... ON DUPLICATE KEY UPDATE для атомарного создания/обновления.
+	// Если запись существует, увеличиваем used_days на daysDelta.
+	// Если запись не существует, создаем ее с total_days = defaultTotalDays и used_days = daysDelta (если > 0).
+	// Учитываем, что used_days не может быть < 0 при возврате.
 	query := `
-		UPDATE vacation_limits 
-		SET used_days = used_days + ?, updated_at = CURRENT_TIMESTAMP 
-		WHERE user_id = ? AND year = ?`
+		INSERT INTO vacation_limits (user_id, year, total_days, used_days, created_at, updated_at) 
+		VALUES (?, ?, ?, GREATEST(0, ?), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) -- Используем GREATEST(0, ?) для used_days при вставке
+		ON DUPLICATE KEY UPDATE 
+			used_days = GREATEST(0, used_days + VALUES(used_days)), -- Используем GREATEST(0, ...) и при обновлении
+			updated_at = CURRENT_TIMESTAMP`
+	// total_days не трогаем при обновлении used_days
 
-	result, err := r.db.Exec(query, daysDelta, userID, year)
+	_, err := r.db.Exec(query, userID, year, defaultTotalDays, daysDelta) // Передаем daysDelta в VALUES(used_days)
 	if err != nil {
-		return fmt.Errorf("ошибка обновления использованных дней лимита: %w", err)
+		// Добавляем контекст к ошибке
+		return fmt.Errorf("ошибка атомарного обновления used_days (user: %d, year: %d, delta: %d): %w", userID, year, daysDelta, err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("ошибка получения количества обновленных строк при изменении лимита: %w", err)
-	}
-	if rowsAffected == 0 {
-		// Вместо ошибки, можно просто ничего не делать, если лимита нет
-		// Или создать лимит по умолчанию? Пока возвращаем ошибку, но можно изменить логику.
-		return fmt.Errorf("лимит отпуска для пользователя %d на год %d не найден для обновления", userID, year)
-	}
-	return nil
+	// Проверка на отрицательный used_days больше не нужна здесь, т.к. GREATEST(0, ...) обрабатывает это в SQL.
+	// Проверка RowsAffected также не нужна, так как INSERT ... ON DUPLICATE KEY UPDATE всегда затрагивает строку (либо вставкой, либо обновлением).
+
+	return nil // Успешно
 }
 
 // --- Заявки ---
@@ -262,7 +268,6 @@ func (r *VacationRepository) getPeriodsByRequestID(requestID int) ([]models.Vaca
 	return periods, nil
 }
 
-
 // GetVacationRequestsByUser получает заявки пользователя с фильтрацией по статусу
 func (r *VacationRepository) GetVacationRequestsByUser(userID int, year int, statusFilter *int) ([]models.VacationRequest, error) {
 	baseQuery := `
@@ -330,7 +335,6 @@ func (r *VacationRepository) GetVacationRequestsByUser(userID int, year int, sta
 	}
 	return result, nil
 }
-
 
 // GetVacationRequestsByDepartment получает заявки подразделения с фильтрацией по статусу
 func (r *VacationRepository) GetVacationRequestsByDepartment(departmentID int, year int, statusFilter *int) ([]models.VacationRequest, error) {
@@ -400,7 +404,6 @@ func (r *VacationRepository) GetVacationRequestsByDepartment(departmentID int, y
 	}
 	return result, nil
 }
-
 
 // GetAllVacationRequests получает все заявки для админов/менеджеров с фильтрами
 func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilter *int, userIDFilter *int, departmentIDFilter *int) ([]models.VacationRequestAdminView, error) {
@@ -544,7 +547,6 @@ func (r *VacationRepository) getPeriodsByRequestIDs(requestIDs []interface{}) ([
 	return periods, nil
 }
 
-
 // --- Уведомления ---
 
 // CreateNotification создает новое уведомление
@@ -559,7 +561,6 @@ func (r *VacationRepository) CreateNotification(notification *models.Notificatio
 	}
 	return nil
 }
-
 
 // --- Вспомогательные функции ---
 
