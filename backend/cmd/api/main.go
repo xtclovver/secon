@@ -110,7 +110,11 @@ func main() {
 				units.GET("/:id", appHandler.GetOrganizationalUnitByID)   // Получить юнит по ID (остается админским)
 				units.PUT("/:id", appHandler.UpdateOrganizationalUnit)    // Обновить юнит
 				units.DELETE("/:id", appHandler.DeleteOrganizationalUnit) // Удалить юнит
+				// Новый маршрут для получения пользователей юнита с лимитами (Используем :id вместо :unitId)
+				units.GET("/:id/users-with-limits", appHandler.GetUnitUsersWithLimitsHandler) // GET /api/admin/units/{id}/users-with-limits?year=...
 			}
+			// Новый маршрут для обновления лимита конкретного пользователя
+			admin.PUT("/users/:userId/vacation-limit", appHandler.UpdateUserVacationLimitHandler) // PUT /api/admin/users/{userId}/vacation-limit
 			// TODO: Добавить другие админские маршруты (управление пользователями и т.д.)
 		}
 

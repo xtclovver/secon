@@ -79,3 +79,33 @@ export const getOrganizationalUnitById = async (unitId) => {
       throw error.response?.data?.error || new Error("Не удалось загрузить данные юнита");
     }
   };
+
+// Получить пользователей юнита с их лимитами отпуска на год
+export const getUnitUsersWithLimits = async (unitId, year) => {
+  try {
+    // Используем authApi для GET запроса с параметрами
+    const response = await authApi.get(`/admin/units/${unitId}/users-with-limits`, {
+      params: { year },
+    });
+    // Ожидаем массив UserWithLimitAdminDTO
+    return response.data;
+  } catch (error) {
+    console.error(`Ошибка при получении пользователей с лимитами для юнита ${unitId}, год ${year}:`, error.response?.data?.error || error.message);
+    throw error.response?.data?.error || new Error("Не удалось загрузить пользователей юнита с лимитами");
+  }
+};
+
+// Обновить лимит отпуска для пользователя на год
+export const updateUserVacationLimit = async (userId, year, totalDays) => {
+  try {
+    // Используем authApi для PUT запроса
+    const response = await authApi.put(`/admin/users/${userId}/vacation-limit`, {
+      year: year,
+      total_days: totalDays,
+    });
+    return response.data; // Обычно возвращает сообщение об успехе
+  } catch (error) {
+    console.error(`Ошибка при обновлении лимита отпуска для пользователя ${userId}, год ${year}:`, error.response?.data?.error || error.message);
+    throw error.response?.data?.error || new Error("Не удалось обновить лимит отпуска пользователя");
+  }
+};

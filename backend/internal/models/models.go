@@ -243,3 +243,12 @@ type UnitListItemDTO struct {
 	Position *string `json:"position,omitempty"`  // Position name if Type is "user"
 	// Можно добавить другие поля по необходимости, например, ManagerID для юнита
 }
+
+// UserWithLimitAdminDTO - DTO для отображения пользователя в админ-панели управления подразделениями, включая лимит отпуска
+type UserWithLimitAdminDTO struct {
+	ID           int     `json:"id" db:"id"`
+	FullName     string  `json:"full_name" db:"full_name"`
+	PositionName *string `json:"position_name,omitempty" db:"position_name"` // Указатель для NULL
+	TotalDays    *int    `json:"total_days" db:"total_days"`                 // Указатель, так как лимит может отсутствовать для года
+	// Возможно, добавим organizational_unit_id, если потребуется для других целей
+}

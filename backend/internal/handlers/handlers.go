@@ -783,3 +783,103 @@ func (h *AppHandler) GetMyProfile(c *gin.Context) {
 	// Возвращаем профиль
 	c.JSON(http.StatusOK, profile)
 }
+
+// GetUnitUsersWithLimitsHandler обработчик для получения пользователей юнита с лимитами отпуска (Admin only)
+func (h *AppHandler) GetUnitUsersWithLimitsHandler(c *gin.Context) {
+	// Проверяем права администратора
+	isAdmin, exists := c.Get("isAdmin")
+	if !exists || !isAdmin.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права администратора"})
+		return
+	}
+
+	// Получаем ID юнита из URL (теперь параметр называется "id")
+	unitIDStr := c.Param("id") // Изменено с "unitId" на "id"
+	unitID, err := strconv.Atoi(unitIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID орг. юнита"})
+		return
+	}
+
+	// Получаем год из query параметра
+	yearStr := c.Query("year")
+	if yearStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Параметр 'year' обязателен"})
+		return
+	}
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат года"})
+		return
+	}
+
+	// Вызываем сервис для получения пользователей с лимитами
+	usersWithLimits, err := h.unitService.GetUnitUsersWithLimits(unitID, year)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "не найден") { // Проверяем, если юнит не найден
+			statusCode = http.StatusNotFound
+		}
+		c.JSON(statusCode, gin.H{"error": "Ошибка получения пользователей юнита с лимитами: " + err.Error()})
+		return
+	}
+
+	// Если лимиты не найдены для некоторых пользователей, поле TotalDays будет nil.
+	// Здесь можно установить значение по умолчанию, если это требуется для фронтенда.
+	// Например:
+	// for i := range usersWithLimits {
+	// 	if usersWithLimits[i].TotalDays == nil {
+	// 		defaultValue := 28 // Значение по умолчанию
+	// 		usersWithLimits[i].TotalDays = &defaultValue
+	// 	}
+	// }
+
+	c.JSON(http.StatusOK, usersWithLimits)
+}
+
+// UpdateUserVacationLimitHandler обработчик для обновления лимита отпуска пользователя (Admin only)
+func (h *AppHandler) UpdateUserVacationLimitHandler(c *gin.Context) {
+	// Проверяем права администратора
+	isAdmin, exists := c.Get("isAdmin")
+	if !exists || !isAdmin.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права администратора"})
+		return
+	}
+
+	// Получаем ID пользователя из URL
+	userIDStr := c.Param("userId") // Используем userId из роута
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID пользователя"})
+		return
+	}
+
+	// Структура для данных из тела запроса
+	var input struct {
+		Year      int `json:"year" binding:"required"`
+		TotalDays int `json:"total_days"` // Не используем binding:"required", чтобы позволить 0
+	}
+
+	// Привязываем JSON из тела запроса
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные: " + err.Error()})
+		return
+	}
+
+	// Проверяем total_days на отрицательное значение (0 разрешен)
+	if input.TotalDays < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Количество дней отпуска не может быть отрицательным"})
+		return
+	}
+
+	// Вызываем сервис VacationService для установки (создания/обновления) лимита
+	err = h.vacationService.SetVacationLimit(userID, input.Year, input.TotalDays)
+	if err != nil {
+		// Обрабатываем возможные ошибки сервиса
+		// (ошибка БД, но валидация на отрицательные дни уже сделана)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка установки лимита отпуска: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Лимит отпуска пользователя успешно обновлен"})
+}

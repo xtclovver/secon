@@ -13,7 +13,8 @@ type OrganizationalUnitServiceInterface interface {
 	UpdateUnit(id int, updateData *models.OrganizationalUnit) (*models.OrganizationalUnit, error)
 	DeleteUnit(id int) error
 	GetUnitTree() ([]*models.OrganizationalUnit, error)
-	GetUnitChildrenAndUsers(parentUnitID *int) ([]models.UnitListItemDTO, error) // Новый метод
+	GetUnitChildrenAndUsers(parentUnitID *int) ([]models.UnitListItemDTO, error)         // Новый метод
+	GetUnitUsersWithLimits(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) // Метод для получения пользователей юнита с лимитами
 }
 
 // OrganizationalUnitService реализует интерфейс
@@ -227,4 +228,28 @@ func (s *OrganizationalUnitService) GetUnitChildrenAndUsers(parentUnitID *int) (
 	// TODO: Возможно, нужна сортировка смешанного списка (например, сначала юниты, потом пользователи, или по имени)
 
 	return listItems, nil
+}
+
+// GetUnitUsersWithLimits получает список пользователей для заданного юнита с их лимитами отпуска на год
+func (s *OrganizationalUnitService) GetUnitUsersWithLimits(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) {
+	// Проверяем, существует ли юнит (опционально, но полезно)
+	unit, err := s.unitRepo.GetByID(unitID)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка проверки существования юнита ID %d: %w", unitID, err)
+	}
+	if unit == nil {
+		return nil, fmt.Errorf("орг. юнит ID %d не найден", unitID)
+	}
+
+	// Получаем пользователей с лимитами через репозиторий пользователей
+	usersWithLimits, err := s.userRepo.GetUsersWithLimitsByOrganizationalUnit(unitID, year)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения пользователей с лимитами для юнита ID %d: %w", unitID, err)
+	}
+
+	// Дополнительная логика: если у пользователя нет лимита (TotalDays = nil),
+	// можно здесь установить значение по умолчанию (например, 28) или оставить как есть,
+	// чтобы фронтенд обработал это. Оставим как есть.
+
+	return usersWithLimits, nil
 }

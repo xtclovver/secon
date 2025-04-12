@@ -19,9 +19,10 @@ type UserRepositoryInterface interface {
 	CreateUser(user *models.User) error
 	UpdateUser(userID int, updateData *models.UserUpdateDTO) error
 	GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error)
-	GetAllPositions() ([]models.Position, error)                   // Восстановлен метод для получения всех должностей
-	GetUserProfileByID(userID int) (*models.UserProfileDTO, error) // Новый метод для профиля
-	FindByOrganizationalUnitID(unitID int) ([]*models.User, error) // Найти пользователей по ID орг. юнита
+	GetAllPositions() ([]models.Position, error)                                                         // Восстановлен метод для получения всех должностей
+	GetUserProfileByID(userID int) (*models.UserProfileDTO, error)                                       // Новый метод для профиля
+	FindByOrganizationalUnitID(unitID int) ([]*models.User, error)                                       // Найти пользователей по ID орг. юнита
+	GetUsersWithLimitsByOrganizationalUnit(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) // Новый метод
 	// TODO: Добавить интерфейсы для работы с OrganizationalUnit
 }
 
@@ -575,6 +576,65 @@ func (r *UserRepository) FindByOrganizationalUnitID(unitID int) ([]*models.User,
 	}
 
 	return users, nil
+}
+
+// GetUsersWithLimitsByOrganizationalUnit получает пользователей конкретного юнита с их лимитами на год
+func (r *UserRepository) GetUsersWithLimitsByOrganizationalUnit(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) {
+	query := `
+		SELECT
+			u.id,
+			u.full_name,
+			p.name AS position_name,
+			vl.total_days
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		LEFT JOIN vacation_limits vl ON u.id = vl.user_id AND vl.year = ?
+		WHERE u.organizational_unit_id = ?
+		ORDER BY u.full_name ASC`
+
+	rows, err := r.db.Query(query, year, unitID)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса пользователей юнита %d с лимитами на год %d: %w", unitID, year, err)
+	}
+	defer rows.Close()
+
+	var usersWithLimits []models.UserWithLimitAdminDTO
+	for rows.Next() {
+		var userDTO models.UserWithLimitAdminDTO
+		var positionName sql.NullString
+		var totalDays sql.NullInt64
+
+		if err := rows.Scan(&userDTO.ID, &userDTO.FullName, &positionName, &totalDays); err != nil {
+			// log.Printf("Ошибка сканирования пользователя юнита %d с лимитом: %v", unitID, err)
+			continue // Пропускаем пользователя с ошибкой
+		}
+
+		// Устанавливаем PositionName
+		if positionName.Valid {
+			name := positionName.String
+			userDTO.PositionName = &name
+		} else {
+			userDTO.PositionName = nil
+		}
+
+		// Устанавливаем TotalDays
+		if totalDays.Valid {
+			days := int(totalDays.Int64)
+			userDTO.TotalDays = &days
+		} else {
+			// Если лимита нет, можно оставить nil или установить дефолтное значение (например, 0 или 28, если требуется)
+			// Оставляем nil, чтобы фронтенд мог решить, как это отображать
+			userDTO.TotalDays = nil
+		}
+
+		usersWithLimits = append(usersWithLimits, userDTO)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации по пользователям юнита %d с лимитами: %w", unitID, err)
+	}
+
+	return usersWithLimits, nil
 }
 
 // TODO: Добавить репозиторий и методы для работы с organizational_units (CRUD, получение дерева)
