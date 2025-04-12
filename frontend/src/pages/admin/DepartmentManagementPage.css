@@ -1,12 +1,13 @@
 /* --- Общие стили страницы --- */
 .department-management-page {
   padding: 25px; /* Немного увеличим отступы */
-  background-color: var(--bg-primary); /* Используем переменную фона страницы */
+  background-color: var(--bg-secondary); /* Изменено на фон, используемый в меню */
   color: var(--text-color);
   max-width: 1000px; /* Можно немного увеличить ширину */
   margin: 30px auto;
+  border: 1px solid var(--border-color); /* Добавлена рамка для схожести с меню */
   border-radius: var(--border-radius-lg); /* Используем переменную */
-  box-shadow: var(--shadow-md); /* Используем переменную */
+  box-shadow: var(--shadow-md); /* Используем переменную (уже была) */
   transition: background-color var(--transition-normal), color var(--transition-normal); /* Уточняем переходы */
 }
 
