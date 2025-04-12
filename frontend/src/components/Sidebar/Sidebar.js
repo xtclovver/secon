@@ -10,7 +10,8 @@ import {
   FaChevronLeft,
   FaChevronRight,
   FaUserShield, // Иконка для админа
-  FaUserTie // Иконка для руководителя
+  FaUserTie, // Иконка для руководителя
+  FaSitemap // Иконка для структуры - ДОБАВЛЕНО
 } from 'react-icons/fa';
 import { ThemeContext } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
@@ -126,14 +127,25 @@ const Sidebar = () => {
           
           {/* Пункты меню для администратора */}
           {user?.isAdmin && ( // ВОЗВРАЩЕНО: Проверяем user.isAdmin
-            <li className="role-section admin-section">
-               <NavLink to="/admin/dashboard" className={({isActive}) => isActive ? 'active' : ''}>
-                <FaUserShield /> {/* Иконка админа */}
-                {/* Всегда показываем текст, если isAdmin true, для отладки */}
-                <span>Админ-панель</span> 
-              </NavLink>
-               {/* Другие пункты для админа */}
-            </li>
+            <> {/* Используем фрагмент для группировки */}
+              <li className="role-section admin-section">
+                 <NavLink to="/admin/dashboard" className={({isActive}) => isActive ? 'active' : ''}>
+                  <FaUserShield /> {/* Иконка админа */}
+                  <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
+                    Админ-панель
+                  </motion.span>
+                </NavLink>
+              </li>
+              {/* Новая ссылка на управление подразделениями */}
+              <li>
+                <NavLink to="/admin/units" className={({ isActive }) => isActive ? 'active' : ''}> {/* Убеждаемся в правильном синтаксисе */}
+                  <FaSitemap /> {/* Иконка для структуры */}
+                  <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
+                    Упр. подразделениями
+                  </motion.span>
+                </NavLink>
+              </li>
+            </>
           )}
         </ul>
       </nav>

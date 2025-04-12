@@ -83,49 +83,63 @@ func (cd *CustomDate) Scan(value interface{}) error {
 
 // User - модель пользователя
 type User struct {
-	ID           int       `json:"id" db:"id"`
-	Login        string    `json:"login" db:"login"` // Изменено с Username на Login
-	Password     string    `json:"-" db:"password"`
-	FullName     string    `json:"full_name" db:"full_name"`
-	Email        string    `json:"email" db:"email"`
-	DepartmentID *int      `json:"department_id" db:"department_id"`
-	PositionID   *int      `json:"position_id,omitempty" db:"position_id"`    // Добавлено поле для должности, omitempty если не будет имени
-	PositionName *string   `json:"positionName,omitempty" db:"position_name"` // Изменен JSON тег на positionName
-	IsAdmin      bool      `json:"is_admin" db:"is_admin"`
-	IsManager    bool      `json:"is_manager" db:"is_manager"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	ID       int    `json:"id" db:"id"`
+	Login    string `json:"login" db:"login"` // Изменено с Username на Login
+	Password string `json:"-" db:"password"`
+	FullName string `json:"full_name" db:"full_name"`
+	// Email                string    `json:"email" db:"email"` // Удалено
+	OrganizationalUnitID *int      `json:"organizational_unit_id,omitempty" db:"organizational_unit_id"` // Переименовано с department_id
+	PositionID           *int      `json:"position_id,omitempty" db:"position_id"`
+	PositionName         *string   `json:"positionName,omitempty" db:"position_name"` // Use pointer for nullable position name
+	IsAdmin              bool      `json:"is_admin" db:"is_admin"`
+	IsManager            bool      `json:"is_manager" db:"is_manager"`
+	CreatedAt            time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// UserProfileDTO - DTO для отображения профиля пользователя с иерархией юнитов
+type UserProfileDTO struct {
+	ID       int    `json:"id"`
+	Login    string `json:"login"`
+	FullName string `json:"full_name"`
+	// Email         string    `json:"email"` // Удалено, так как не выбирается в GetUserProfileByID
+	PositionName  *string   `json:"positionName,omitempty"`  // Optional position name
+	Department    *string   `json:"department,omitempty"`    // Название департамента (верхний уровень)
+	SubDepartment *string   `json:"subDepartment,omitempty"` // Название подотдела (средний уровень)
+	Sector        *string   `json:"sector,omitempty"`        // Название сектора (нижний уровень)
+	IsAdmin       bool      `json:"is_admin"`
+	IsManager     bool      `json:"is_manager"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // UserUpdateDTO - структура для обновления данных пользователя
 type UserUpdateDTO struct {
-	FullName   *string `json:"full_name"`   // Указатель, чтобы различать пустую строку и отсутствие значения
-	Password   *string `json:"password"`    // Указатель для опционального обновления пароля
-	PositionID *int    `json:"position_id"` // Указатель для опционального обновления должности (только для админа/менеджера)
+	FullName             *string `json:"full_name"`              // Указатель, чтобы различать пустую строку и отсутствие значения
+	Password             *string `json:"password"`               // Указатель для опционального обновления пароля
+	PositionID           *int    `json:"position_id"`            // Указатель для опционального обновления должности
+	OrganizationalUnitID *int    `json:"organizational_unit_id"` // Указатель для опционального обновления юнита
 }
 
-// PositionGroup - модель группы должностей
-type PositionGroup struct {
-	ID        int        `json:"id" db:"id"`
-	Name      string     `json:"name" db:"name"`
-	SortOrder int        `json:"sort_order" db:"sort_order"`
-	Positions []Position `json:"positions"` // Список должностей в этой группе
-}
-
-// Position - модель должности
+// Position - модель должности (без GroupID)
 type Position struct {
-	ID      int    `json:"id" db:"id"`
-	Name    string `json:"name" db:"name"`
-	GroupID int    `json:"-" db:"group_id"` // Скрываем group_id в JSON, так как он будет в структуре группы
+	ID   int    `json:"id" db:"id"`
+	Name string `json:"name" db:"name"`
+	// GroupID удалено
 }
 
-// Department - модель подразделения
-type Department struct {
-	ID        int       `json:"id" db:"id"`
-	Name      string    `json:"name" db:"name"`
-	ManagerID *int      `json:"manager_id" db:"manager_id"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+// OrganizationalUnit - модель для иерархии подразделений, отделов, секторов и т.д.
+type OrganizationalUnit struct {
+	ID        int                   `json:"id" db:"id"`
+	Name      string                `json:"name" db:"name"`
+	UnitType  string                `json:"unit_type" db:"unit_type"`             // 'DEPARTMENT', 'SUB_DEPARTMENT', 'SECTOR', etc.
+	ParentID  *int                  `json:"parent_id,omitempty" db:"parent_id"`   // Указатель для NULL parent_id (корень)
+	ManagerID *int                  `json:"manager_id,omitempty" db:"manager_id"` // Указатель на ID руководителя
+	CreatedAt time.Time             `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time             `json:"updated_at" db:"updated_at"`
+	Children  []*OrganizationalUnit `json:"children,omitempty" db:"-"`  // Дочерние юниты (для построения дерева), не маппится на БД
+	Positions []Position            `json:"positions,omitempty" db:"-"` // Должности в этом юните (если применимо), не маппится на БД
+	Users     []User                `json:"users,omitempty" db:"-"`     // Пользователи в этом юните (если применимо), не маппится на БД
 }
 
 // VacationRequest - модель заявки на отпуск
@@ -193,11 +207,12 @@ type Intersection struct {
 
 // UserWithLimitDTO represents user data along with their vacation limit for a specific year.
 type UserWithLimitDTO struct {
-	ID                int     `json:"id"`
-	FullName          string  `json:"full_name"`
-	Email             string  `json:"email"`               // Оставляем email, вдруг понадобится
-	Position          *string `json:"position,omitempty"`  // Добавлено поле для должности (указатель для NULL)
-	VacationLimitDays *int    `json:"vacation_limit_days"` // Pointer to handle null/absence of limit
+	ID       int    `json:"id"`
+	FullName string `json:"full_name"`
+	// Email             string  `json:"email"`            // Удалено, так как больше не используется
+	Position               *string `json:"position,omitempty"`               // Добавлено поле для должности (указатель для NULL)
+	OrganizationalUnitName *string `json:"organizationalUnitName,omitempty"` // <--- Добавлено: Название орг. юнита
+	VacationLimitDays      *int    `json:"vacation_limit_days"`              // Pointer to handle null/absence of limit
 }
 
 // --- New DTO for Admin/Manager View ---
@@ -215,4 +230,25 @@ type VacationRequestAdminView struct {
 	UpdatedAt     time.Time        `json:"updated_at" db:"updated_at"`
 	Periods       []VacationPeriod `json:"periods"`    // Populated separately
 	TotalDays     int              `json:"total_days"` // Calculated total days across periods (остается для отображения, но не используется для логики списания)
+}
+
+// --- DTO for Unit/User List ---
+
+// UnitListItemDTO - Элемент списка для отображения юнитов или пользователей в иерархии
+type UnitListItemDTO struct {
+	ID       int     `json:"id"`
+	Name     string  `json:"name"`
+	Type     string  `json:"type"`                // "unit" or "user"
+	UnitType *string `json:"unit_type,omitempty"` // Specific type if Type is "unit" ('DEPARTMENT', 'SECTOR', etc.)
+	Position *string `json:"position,omitempty"`  // Position name if Type is "user"
+	// Можно добавить другие поля по необходимости, например, ManagerID для юнита
+}
+
+// UserWithLimitAdminDTO - DTO для отображения пользователя в админ-панели управления подразделениями, включая лимит отпуска
+type UserWithLimitAdminDTO struct {
+	ID           int     `json:"id" db:"id"`
+	FullName     string  `json:"full_name" db:"full_name"`
+	PositionName *string `json:"position_name,omitempty" db:"position_name"` // Указатель для NULL
+	TotalDays    *int    `json:"total_days" db:"total_days"`                 // Указатель, так как лимит может отсутствовать для года
+	// Возможно, добавим organizational_unit_id, если потребуется для других целей
 }

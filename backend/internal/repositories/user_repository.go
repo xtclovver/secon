@@ -4,6 +4,7 @@ import (
 	"database/sql" // Оставляем один импорт
 	"errors"
 	"fmt" // Для форматирования ошибок
+	"strings"
 
 	"vacation-scheduler/internal/models"
 
@@ -12,15 +13,17 @@ import (
 
 // UserRepositoryInterface определяет методы для репозитория пользователей
 type UserRepositoryInterface interface {
-	FindByLogin(login string) (*models.User, error) // Изменено FindByUsername на FindByLogin
+	FindByLogin(login string) (*models.User, error)
 	FindByID(id int) (*models.User, error)
-	GetUsersByDepartment(departmentID int) ([]models.User, error)
+	GetUsersByOrganizationalUnit(unitID int) ([]models.User, error) // Изменено GetUsersByDepartment
 	CreateUser(user *models.User) error
-	// UpdateUser теперь принимает ID и DTO для частичного обновления
 	UpdateUser(userID int, updateData *models.UserUpdateDTO) error
 	GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error)
-	GetAllPositionsGrouped() ([]models.PositionGroup, error) // Новый метод
-	// Добавьте другие методы по мере необходимости
+	GetAllPositions() ([]models.Position, error)                                                         // Восстановлен метод для получения всех должностей
+	GetUserProfileByID(userID int) (*models.UserProfileDTO, error)                                       // Новый метод для профиля
+	FindByOrganizationalUnitID(unitID int) ([]*models.User, error)                                       // Найти пользователей по ID орг. юнита
+	GetUsersWithLimitsByOrganizationalUnit(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) // Новый метод
+	// TODO: Добавить интерфейсы для работы с OrganizationalUnit
 }
 
 // UserRepository реализует UserRepositoryInterface
@@ -37,9 +40,9 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 func (r *UserRepository) FindByLogin(login string) (*models.User, error) { // Изменено FindByUsername на FindByLogin
 	// Запрос к БД для поиска пользователя с названием должности
 	query := `
-		SELECT 
-			u.id, u.login, u.password, u.full_name, u.email, 
-			u.department_id, u.position_id, p.name AS position_name, 
+		SELECT
+			u.id, u.login, u.password, u.full_name, 
+			u.organizational_unit_id, u.position_id, p.name AS position_name, 
 			u.is_admin, u.is_manager, u.created_at, u.updated_at
 		FROM users u
 		LEFT JOIN positions p ON u.position_id = p.id
@@ -48,16 +51,16 @@ func (r *UserRepository) FindByLogin(login string) (*models.User, error) { // И
 	row := r.db.QueryRow(query, login) // username -> login
 	user := &models.User{}
 
-	// Используем nullable типы для department_id, position_id и position_name
-	var departmentID sql.NullInt64
+	// Используем nullable типы для organizational_unit_id, position_id и position_name
+	var organizationalUnitID sql.NullInt64 // departmentID -> organizationalUnitID
 	var positionID sql.NullInt64
-	var positionName sql.NullString // Для названия должности
+	var positionName sql.NullString
 
 	err := row.Scan(
-		&user.ID, &user.Login, &user.Password, &user.FullName, &user.Email, // Username -> Login
-		&departmentID, // Сканируем в nullable тип
-		&positionID,   // Сканируем в nullable тип
-		&positionName, // Сканируем название должности
+		&user.ID, &user.Login, &user.Password, &user.FullName,
+		&organizationalUnitID, // Сканируем в nullable тип
+		&positionID,
+		&positionName,
 		&user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -70,12 +73,12 @@ func (r *UserRepository) FindByLogin(login string) (*models.User, error) { // И
 		return nil, fmt.Errorf("ошибка при поиске пользователя в БД: %w", err)
 	}
 
-	// Преобразуем nullable тип в указатель на int
-	if departmentID.Valid {
-		deptID := int(departmentID.Int64)
-		user.DepartmentID = &deptID
+	// Преобразуем nullable organizational_unit_id в указатель на int
+	if organizationalUnitID.Valid {
+		unitID := int(organizationalUnitID.Int64)
+		user.OrganizationalUnitID = &unitID
 	} else {
-		user.DepartmentID = nil
+		user.OrganizationalUnitID = nil
 	}
 
 	// Преобразуем nullable position_id в указатель на int
@@ -100,9 +103,9 @@ func (r *UserRepository) FindByLogin(login string) (*models.User, error) { // И
 func (r *UserRepository) FindByID(id int) (*models.User, error) {
 	// Запрос к БД для поиска пользователя с названием должности
 	query := `
-		SELECT 
-			u.id, u.login, u.password, u.full_name, u.email, 
-			u.department_id, u.position_id, p.name AS position_name, 
+		SELECT
+			u.id, u.login, u.password, u.full_name, 
+			u.organizational_unit_id, u.position_id, p.name AS position_name, 
 			u.is_admin, u.is_manager, u.created_at, u.updated_at
 		FROM users u
 		LEFT JOIN positions p ON u.position_id = p.id
@@ -111,18 +114,18 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 	row := r.db.QueryRow(query, id)
 	user := &models.User{}
 
-	// Используем nullable типы для department_id, position_id и position_name
+	// Используем nullable типы для organizational_unit_id, position_id и position_name
 	var (
-		departmentID sql.NullInt64
-		positionID   sql.NullInt64
-		positionName sql.NullString // Для названия должности
+		organizationalUnitID sql.NullInt64 // departmentID -> organizationalUnitID
+		positionID           sql.NullInt64
+		positionName         sql.NullString
 	)
 
 	err := row.Scan(
-		&user.ID, &user.Login, &user.Password, &user.FullName, &user.Email, // Username -> Login
-		&departmentID, // Сканируем в nullable тип
-		&positionID,   // Сканируем в nullable тип
-		&positionName, // Сканируем название должности
+		&user.ID, &user.Login, &user.Password, &user.FullName,
+		&organizationalUnitID, // Сканируем в nullable тип
+		&positionID,
+		&positionName,
 		&user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -133,11 +136,12 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 		return nil, fmt.Errorf("ошибка при поиске пользователя по ID: %w", err)
 	}
 
-	if departmentID.Valid {
-		deptID := int(departmentID.Int64)
-		user.DepartmentID = &deptID
+	// Преобразуем nullable organizational_unit_id в указатель на int
+	if organizationalUnitID.Valid {
+		unitID := int(organizationalUnitID.Int64)
+		user.OrganizationalUnitID = &unitID
 	} else {
-		user.DepartmentID = nil
+		user.OrganizationalUnitID = nil
 	}
 
 	if positionID.Valid {
@@ -157,34 +161,49 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 	return user, nil
 }
 
-// GetUsersByDepartment получает список пользователей по ID подразделения
-func (r *UserRepository) GetUsersByDepartment(departmentID int) ([]models.User, error) {
+// GetUsersByOrganizationalUnit получает список пользователей по ID орг. юнита
+func (r *UserRepository) GetUsersByOrganizationalUnit(unitID int) ([]models.User, error) { // Изменено GetUsersByDepartment
 	query := `
-		SELECT id, login, full_name, email, is_admin, is_manager 
-		FROM users 
-		WHERE department_id = ?` // username -> login
+		SELECT u.id, u.login, u.full_name, u.position_id, p.name as position_name, u.is_admin, u.is_manager 
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		WHERE u.organizational_unit_id = ?` // Добавлен JOIN для должности
 
-	rows, err := r.db.Query(query, departmentID)
+	rows, err := r.db.Query(query, unitID)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса пользователей подразделения: %w", err)
+		return nil, fmt.Errorf("ошибка запроса пользователей орг. юнита: %w", err)
 	}
 	defer rows.Close()
 
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		// Сканируем только нужные поля для этого запроса
-		if err := rows.Scan(&user.ID, &user.Login, &user.FullName, &user.Email, &user.IsAdmin, &user.IsManager); err != nil { // Username -> Login
-			// Логирование ошибки сканирования может быть полезно
-			// log.Printf("Ошибка сканирования пользователя подразделения: %v", err)
-			// Продолжаем сканировать остальных, но можно и вернуть ошибку
+		var positionID sql.NullInt64    // Для nullable position_id
+		var positionName sql.NullString // Для nullable position_name
+		// Сканируем поля, включая название должности
+		if err := rows.Scan(&user.ID, &user.Login, &user.FullName, &positionID, &positionName, &user.IsAdmin, &user.IsManager); err != nil {
+			// log.Printf("Ошибка сканирования пользователя орг. юнита: %v", err)
 			continue
 		}
-		users = append(users, user)
+		// Устанавливаем PositionID
+		if positionID.Valid {
+			posID := int(positionID.Int64)
+			user.PositionID = &posID
+		} else {
+			user.PositionID = nil
+		}
+		// Устанавливаем PositionName
+		if positionName.Valid {
+			posName := positionName.String
+			user.PositionName = &posName
+		} else {
+			user.PositionName = nil
+		}
+		users = append(users, user) // Добавляем пользователя один раз
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("ошибка при итерации по пользователям подразделения: %w", err)
+		return nil, fmt.Errorf("ошибка при итерации по пользователям орг. юнита: %w", err)
 	}
 
 	return users, nil
@@ -199,13 +218,13 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 	}
 
 	query := `
-		INSERT INTO users (login, password, full_name, email, department_id, position_id, is_admin, is_manager, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)` // username -> login
+		INSERT INTO users (login, password, full_name, organizational_unit_id, position_id, is_admin, is_manager, created_at, updated_at) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)` // email уже удален
 
 	result, err := r.db.Exec(query,
-		user.Login, string(hashedPassword), user.FullName, user.Email, // Username -> Login
-		user.DepartmentID, // Может быть nil
-		user.PositionID,   // Может быть nil
+		user.Login, string(hashedPassword), user.FullName,
+		user.OrganizationalUnitID, // Может быть nil
+		user.PositionID,           // Может быть nil
 		user.IsAdmin, user.IsManager,
 	)
 	if err != nil {
@@ -232,43 +251,48 @@ func (r *UserRepository) UpdateUser(userID int, updateData *models.UserUpdateDTO
 
 	query := "UPDATE users SET "
 	args := []interface{}{}
-	argID := 1 // Счетчик для плейсхолдеров
+	argID := 1
 
-	// Динамически строим запрос
+	// Строим запрос динамически
+	updates := []string{}
 	if updateData.FullName != nil {
-		query += "full_name = ?, " // Используем стандартный плейсхолдер '?'
+		updates = append(updates, "full_name = ?")
 		args = append(args, *updateData.FullName)
 		argID++
 	}
-	if updateData.Password != nil && *updateData.Password != "" { // Обновляем пароль, только если он не пустой
+	if updateData.Password != nil && *updateData.Password != "" {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*updateData.Password), 12)
 		if err != nil {
 			return fmt.Errorf("ошибка хеширования нового пароля: %w", err)
 		}
-		query += "password = ?, " // Используем стандартный плейсхолдер '?'
+		updates = append(updates, "password = ?")
 		args = append(args, string(hashedPassword))
 		argID++
 	}
 	if updateData.PositionID != nil {
-		query += "position_id = ?, " // Используем стандартный плейсхолдер '?'
+		updates = append(updates, "position_id = ?")
 		args = append(args, *updateData.PositionID)
 		argID++
 	}
+	// Добавлено обновление organizational_unit_id
+	if updateData.OrganizationalUnitID != nil {
+		updates = append(updates, "organizational_unit_id = ?")
+		args = append(args, *updateData.OrganizationalUnitID)
+		argID++
+		argID++
+	}
 
-	// Если нечего обновлять (кроме updated_at)
-	if argID == 1 {
+	if len(updates) == 0 {
 		return errors.New("нет полей для обновления")
 	}
 
-	// Добавляем обновление времени и условие WHERE
-	query += "updated_at = CURRENT_TIMESTAMP " // Пробел перед WHERE важен
-	query += "WHERE id = ?"                    // Используем стандартный плейсхолдер '?'
-	args = append(args, userID)                // Добавляем ID пользователя в конец списка аргументов
+	// Добавляем updated_at и формируем запрос
+	updates = append(updates, "updated_at = CURRENT_TIMESTAMP")
+	query += strings.Join(updates, ", ")
+	query += " WHERE id = ?"
+	args = append(args, userID)
 
-	// Заменяем плейсхолдеры MySQL (?) на плейсхолдеры PostgreSQL ($) если нужно
-	// query = strings.ReplaceAll(query, "?", "$") // Раскомментировать для PostgreSQL
-
-	// Выполняем запрос
+	// Выполняем запрос (плейсхолдеры '?' подходят для MySQL)
 	result, err := r.db.Exec(query, args...)
 	if err != nil {
 		// TODO: Добавить более специфичную обработку ошибок БД, например, для неверного position_id
@@ -294,10 +318,11 @@ func (r *UserRepository) GetAllUsersWithLimits(year int) ([]models.UserWithLimit
 		SELECT 
 			u.id, 
 			u.full_name, 
-			u.email,         -- Оставляем email на всякий случай, но добавим должность
 			p.name AS position_name, -- Добавляем название должности
-			vl.total_days    -- Лимит дней
+			vl.total_days,    -- Лимит дней
+			ou.name AS organizational_unit_name -- Добавляем название юнита
 		FROM users u
+		LEFT JOIN organizational_units ou ON u.organizational_unit_id = ou.id -- Добавляем JOIN для юнита
 		LEFT JOIN positions p ON u.position_id = p.id -- Добавляем JOIN для получения должности
 		LEFT JOIN vacation_limits vl ON u.id = vl.user_id AND vl.year = ?
 		ORDER BY u.full_name` // Сортируем по имени для удобства отображения
@@ -313,14 +338,15 @@ func (r *UserRepository) GetAllUsersWithLimits(year int) ([]models.UserWithLimit
 		var userDTO models.UserWithLimitDTO
 		var limitDays sql.NullInt64     // Для total_days
 		var positionName sql.NullString // Для position_name
+		var unitName sql.NullString     // <--- Добавлено: объявление переменной для имени юнита
 
-		// Сканируем ID, ФИО, Email, Название должности, Лимит дней
+		// Сканируем ID, ФИО, Название должности, Лимит дней
 		if err := rows.Scan(
 			&userDTO.ID,
 			&userDTO.FullName,
-			&userDTO.Email, // Сканируем email (даже если не используем во фронте сразу)
-			&positionName,  // Сканируем название должности
+			&positionName, // Сканируем название должности
 			&limitDays,
+			&unitName, // Сканируем название юнита
 		); err != nil {
 			// log.Printf("Ошибка сканирования пользователя с лимитом: %v", err)
 			// Можно пропустить пользователя или вернуть ошибку
@@ -343,6 +369,15 @@ func (r *UserRepository) GetAllUsersWithLimits(year int) ([]models.UserWithLimit
 			userDTO.Position = nil // Явно указываем nil, если должности нет
 		}
 
+		// <--- Добавлено: Добавляем имя юнита в DTO
+		if unitName.Valid {
+			name := unitName.String
+			userDTO.OrganizationalUnitName = &name
+		} else {
+			userDTO.OrganizationalUnitName = nil
+		}
+		// --->
+
 		usersWithLimits = append(usersWithLimits, userDTO)
 	}
 
@@ -350,69 +385,256 @@ func (r *UserRepository) GetAllUsersWithLimits(year int) ([]models.UserWithLimit
 		return nil, fmt.Errorf("ошибка при итерации по пользователям с лимитами: %w", err)
 	}
 
+	// Удален дублирующийся блок кода
+
 	return usersWithLimits, nil
 }
 
-// GetAllPositionsGrouped получает все должности, сгруппированные по категориям
-func (r *UserRepository) GetAllPositionsGrouped() ([]models.PositionGroup, error) {
-	// 1. Получаем все группы, отсортированные по sort_order
-	groupQuery := `SELECT id, name, sort_order FROM position_groups ORDER BY sort_order ASC`
-	groupRows, err := r.db.Query(groupQuery)
+// GetAllPositionsGrouped удален, так как группы должностей больше не используются
+
+// GetAllPositions получает плоский список всех должностей из БД
+func (r *UserRepository) GetAllPositions() ([]models.Position, error) {
+	query := `SELECT id, name FROM positions ORDER BY name` // Просто получаем ID и имя, сортируем по имени
+
+	rows, err := r.db.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса групп должностей: %w", err)
+		return nil, fmt.Errorf("ошибка запроса списка должностей: %w", err)
 	}
-	defer groupRows.Close()
+	defer rows.Close()
 
-	groupsMap := make(map[int]*models.PositionGroup) // Карта для быстрого доступа к группам по ID
-	var groupOrder []*models.PositionGroup           // Слайс для сохранения порядка групп
-
-	for groupRows.Next() {
-		var group models.PositionGroup
-		if err := groupRows.Scan(&group.ID, &group.Name, &group.SortOrder); err != nil {
-			// log.Printf("Ошибка сканирования группы должностей: %v", err)
-			continue // Пропускаем ошибочную строку
-		}
-		group.Positions = []models.Position{} // Инициализируем слайс должностей
-		groupsMap[group.ID] = &group
-		groupOrder = append(groupOrder, &group)
-	}
-	if err = groupRows.Err(); err != nil {
-		return nil, fmt.Errorf("ошибка итерации по группам должностей: %w", err)
-	}
-
-	// 2. Получаем все должности, отсортированные по имени
-	positionQuery := `SELECT id, name, group_id FROM positions ORDER BY name ASC`
-	positionRows, err := r.db.Query(positionQuery)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса должностей: %w", err)
-	}
-	defer positionRows.Close()
-
-	for positionRows.Next() {
-		var position models.Position
-		if err := positionRows.Scan(&position.ID, &position.Name, &position.GroupID); err != nil {
+	var positions []models.Position
+	for rows.Next() {
+		var pos models.Position
+		if err := rows.Scan(&pos.ID, &pos.Name); err != nil {
+			// Можно логировать ошибку сканирования
 			// log.Printf("Ошибка сканирования должности: %v", err)
-			continue // Пропускаем ошибочную строку
+			continue // Пропускаем строку с ошибкой
 		}
-
-		// Добавляем должность в соответствующую группу
-		if group, ok := groupsMap[position.GroupID]; ok {
-			group.Positions = append(group.Positions, position)
-		} else {
-			// log.Printf("Предупреждение: Должность %d имеет недействительный group_id %d", position.ID, position.GroupID)
-		}
-	}
-	if err = positionRows.Err(); err != nil {
-		return nil, fmt.Errorf("ошибка итерации по должностям: %w", err)
+		positions = append(positions, pos)
 	}
 
-	// Преобразуем слайс указателей в слайс значений для возврата
-	resultGroups := make([]models.PositionGroup, len(groupOrder))
-	for i, groupPtr := range groupOrder {
-		resultGroups[i] = *groupPtr
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка при итерации по списку должностей: %w", err)
 	}
 
-	return resultGroups, nil
+	return positions, nil
 }
 
-// TODO: Добавить методы для смены пароля, удаления пользователя и т.д.
+// GetUserProfileByID получает данные пользователя для профиля, включая иерархию орг. юнитов
+func (r *UserRepository) GetUserProfileByID(userID int) (*models.UserProfileDTO, error) {
+	// 1. Получаем основные данные пользователя и ID его юнита + имя должности
+	queryUser := `
+		SELECT
+			u.id, u.login, u.full_name, u.organizational_unit_id, 
+			p.name AS position_name,
+			u.is_admin, u.is_manager, u.created_at, u.updated_at
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		WHERE u.id = ?`
+
+	row := r.db.QueryRow(queryUser, userID)
+	profile := &models.UserProfileDTO{}
+	var unitID sql.NullInt64
+	var positionName sql.NullString
+
+	err := row.Scan(
+		&profile.ID, &profile.Login, &profile.FullName, &unitID,
+		&positionName,
+		&profile.IsAdmin, &profile.IsManager, &profile.CreatedAt, &profile.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // Пользователь не найден
+		}
+		return nil, fmt.Errorf("ошибка получения основных данных пользователя ID %d: %w", userID, err)
+	}
+
+	// Устанавливаем имя должности
+	if positionName.Valid {
+		profile.PositionName = &positionName.String
+	} else {
+		profile.PositionName = nil
+	}
+
+	// 2. Если у пользователя есть юнит, получаем иерархию
+	if unitID.Valid {
+		currentUnitID := int(unitID.Int64)
+		unitHierarchy := make([]string, 0, 3) // Предполагаем макс. 3 уровня для Department, SubDepartment, Sector
+
+		queryUnit := `SELECT name, parent_id, unit_type FROM organizational_units WHERE id = ?`
+
+		for currentUnitID != 0 { // Цикл до корневого элемента (или ошибки)
+			var unitName string
+			var parentID sql.NullInt64
+			var unitType string // Пока не используем unit_type для назначения, но можем получить
+
+			err := r.db.QueryRow(queryUnit, currentUnitID).Scan(&unitName, &parentID, &unitType)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					// Юнит не найден, это странно, если currentUnitID валиден
+					// log.Printf("Предупреждение: Юнит с ID %d не найден при построении иерархии для пользователя %d", currentUnitID, userID)
+					break // Прерываем цикл
+				}
+				return nil, fmt.Errorf("ошибка получения юнита ID %d для пользователя %d: %w", currentUnitID, userID, err)
+			}
+
+			unitHierarchy = append(unitHierarchy, unitName) // Добавляем имя текущего юнита
+
+			if parentID.Valid {
+				currentUnitID = int(parentID.Int64)
+			} else {
+				currentUnitID = 0 // Дошли до корня
+			}
+		}
+
+		// 3. Заполняем поля DTO в обратном порядке (от корня к листу)
+		numLevels := len(unitHierarchy)
+		if numLevels > 0 {
+			profile.Department = &unitHierarchy[numLevels-1] // Последний элемент - самый верхний (Department)
+		}
+		if numLevels > 1 {
+			profile.SubDepartment = &unitHierarchy[numLevels-2] // Предпоследний - средний (SubDepartment)
+		}
+		if numLevels > 2 {
+			profile.Sector = &unitHierarchy[numLevels-3] // Третий с конца - самый нижний (Sector)
+			// Если уровней больше 3, самые нижние будут в Sector. Можно изменить логику при необходимости.
+			// Или можно было бы ориентироваться на unit_type, если он строго задан ('DEPARTMENT', 'SUB_DEPARTMENT', 'SECTOR').
+		}
+		// Если уровней меньше, соответствующие поля останутся nil, что корректно
+	}
+
+	return profile, nil
+}
+
+// FindByOrganizationalUnitID находит всех пользователей, принадлежащих указанному орг. юниту
+func (r *UserRepository) FindByOrganizationalUnitID(unitID int) ([]*models.User, error) {
+	// Запрос выбирает пользователей и их должности
+	query := `
+		SELECT
+			u.id, u.login, u.password, u.full_name, 
+			u.organizational_unit_id, u.position_id, p.name AS position_name, 
+			u.is_admin, u.is_manager, u.created_at, u.updated_at
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		WHERE u.organizational_unit_id = ?
+		ORDER BY u.full_name ASC` // Сортируем для консистентности
+
+	rows, err := r.db.Query(query, unitID)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса пользователей по ID орг. юнита %d: %w", unitID, err)
+	}
+	defer rows.Close()
+
+	users := []*models.User{}
+	for rows.Next() {
+		user := &models.User{}
+		var organizationalUnitID sql.NullInt64 // Используем NullInt64
+		var positionID sql.NullInt64
+		var positionName sql.NullString
+
+		err := rows.Scan(
+			&user.ID, &user.Login, &user.Password, &user.FullName,
+			&organizationalUnitID, // Сканируем в nullable типы
+			&positionID,
+			&positionName,
+			&user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
+		)
+		if err != nil {
+			// log.Printf("Ошибка сканирования пользователя для юнита %d: %v", unitID, err)
+			continue // Пропускаем пользователя с ошибкой
+		}
+
+		// Устанавливаем ID юнита (хотя он должен быть равен unitID)
+		if organizationalUnitID.Valid {
+			uID := int(organizationalUnitID.Int64)
+			user.OrganizationalUnitID = &uID
+		} else {
+			user.OrganizationalUnitID = nil // Маловероятно, но для полноты
+		}
+
+		// Устанавливаем ID должности
+		if positionID.Valid {
+			posID := int(positionID.Int64)
+			user.PositionID = &posID
+		} else {
+			user.PositionID = nil
+		}
+
+		// Устанавливаем название должности
+		if positionName.Valid {
+			user.PositionName = &positionName.String
+		} else {
+			user.PositionName = nil
+		}
+
+		users = append(users, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации по пользователям для юнита %d: %w", unitID, err)
+	}
+
+	return users, nil
+}
+
+// GetUsersWithLimitsByOrganizationalUnit получает пользователей конкретного юнита с их лимитами на год
+func (r *UserRepository) GetUsersWithLimitsByOrganizationalUnit(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) {
+	query := `
+		SELECT
+			u.id,
+			u.full_name,
+			p.name AS position_name,
+			vl.total_days
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		LEFT JOIN vacation_limits vl ON u.id = vl.user_id AND vl.year = ?
+		WHERE u.organizational_unit_id = ?
+		ORDER BY u.full_name ASC`
+
+	rows, err := r.db.Query(query, year, unitID)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса пользователей юнита %d с лимитами на год %d: %w", unitID, year, err)
+	}
+	defer rows.Close()
+
+	var usersWithLimits []models.UserWithLimitAdminDTO
+	for rows.Next() {
+		var userDTO models.UserWithLimitAdminDTO
+		var positionName sql.NullString
+		var totalDays sql.NullInt64
+
+		if err := rows.Scan(&userDTO.ID, &userDTO.FullName, &positionName, &totalDays); err != nil {
+			// log.Printf("Ошибка сканирования пользователя юнита %d с лимитом: %v", unitID, err)
+			continue // Пропускаем пользователя с ошибкой
+		}
+
+		// Устанавливаем PositionName
+		if positionName.Valid {
+			name := positionName.String
+			userDTO.PositionName = &name
+		} else {
+			userDTO.PositionName = nil
+		}
+
+		// Устанавливаем TotalDays
+		if totalDays.Valid {
+			days := int(totalDays.Int64)
+			userDTO.TotalDays = &days
+		} else {
+			// Если лимита нет, можно оставить nil или установить дефолтное значение (например, 0 или 28, если требуется)
+			// Оставляем nil, чтобы фронтенд мог решить, как это отображать
+			userDTO.TotalDays = nil
+		}
+
+		usersWithLimits = append(usersWithLimits, userDTO)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации по пользователям юнита %d с лимитами: %w", unitID, err)
+	}
+
+	return usersWithLimits, nil
+}
+
+// TODO: Добавить репозиторий и методы для работы с organizational_units (CRUD, получение дерева)

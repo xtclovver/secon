@@ -31,15 +31,17 @@ func GetIntQueryParam(c *gin.Context, paramName string) *int {
 
 // AppHandler объединяет обработчики для разных частей приложения
 type AppHandler struct {
-	vacationService services.VacationServiceInterface // Используем интерфейс
-	userService     services.UserServiceInterface     // Добавляем сервис пользователей
+	vacationService services.VacationServiceInterface           // Используем интерфейс
+	userService     services.UserServiceInterface               // Добавляем сервис пользователей
+	unitService     services.OrganizationalUnitServiceInterface // Добавляем сервис орг. юнитов
 }
 
 // NewAppHandler создает новый экземпляр AppHandler
-func NewAppHandler(vs services.VacationServiceInterface, us services.UserServiceInterface) *AppHandler {
+func NewAppHandler(vs services.VacationServiceInterface, us services.UserServiceInterface, ous services.OrganizationalUnitServiceInterface) *AppHandler { // Добавлен ous
 	return &AppHandler{
 		vacationService: vs,
-		userService:     us, // Инициализируем userService
+		userService:     us,  // Инициализируем userService
+		unitService:     ous, // Инициализируем unitService
 	}
 }
 
@@ -175,10 +177,10 @@ func (h *AppHandler) SubmitVacationRequest(c *gin.Context) {
 
 // GetVacationIntersections обработчик для получения пересечений отпусков
 func (h *AppHandler) GetVacationIntersections(c *gin.Context) {
-	departmentIDStr := c.Query("departmentId")
-	departmentID, err := strconv.Atoi(departmentIDStr)
+	unitIDStr := c.Query("unitId") // departmentId -> unitId
+	unitID, err := strconv.Atoi(unitIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID подразделения"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID орг. юнита"}) // Обновлено сообщение
 		return
 	}
 
@@ -197,7 +199,7 @@ func (h *AppHandler) GetVacationIntersections(c *gin.Context) {
 	}
 
 	// Получаем пересечения отпусков
-	intersections, err := h.vacationService.CheckIntersections(departmentID, year)
+	intersections, err := h.vacationService.CheckIntersections(unitID, year) // departmentID -> unitID
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при проверке пересечений: " + err.Error()})
 		return
@@ -236,18 +238,23 @@ func (h *AppHandler) GetMyVacations(c *gin.Context) {
 	c.JSON(http.StatusOK, vacations)
 }
 
-// GetDepartmentVacations обработчик для получения отпусков сотрудников подразделения
-func (h *AppHandler) GetDepartmentVacations(c *gin.Context) {
-	isManager, exists := c.Get("isManager")
-	if !exists || !isManager.(bool) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права руководителя"})
+// GetOrganizationalUnitVacations обработчик для получения отпусков сотрудников орг. юнита
+func (h *AppHandler) GetOrganizationalUnitVacations(c *gin.Context) { // GetDepartmentVacations -> GetOrganizationalUnitVacations
+	// Права доступа пока оставим для менеджера или админа (админ получит доступ через middleware)
+	isManagerVal, _ := c.Get("isManager")
+	isAdminVal, _ := c.Get("isAdmin")
+	isManager := isManagerVal.(bool)
+	isAdmin := isAdminVal.(bool)
+
+	if !isAdmin && !isManager {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права руководителя или администратора"})
 		return
 	}
 
-	departmentIDStr := c.Param("id")
-	departmentID, err := strconv.Atoi(departmentIDStr)
+	unitIDStr := c.Param("id") // departmentIDStr -> unitIDStr
+	unitID, err := strconv.Atoi(unitIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID подразделения"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID орг. юнита"}) // Обновлено сообщение
 		return
 	}
 
@@ -258,13 +265,13 @@ func (h *AppHandler) GetDepartmentVacations(c *gin.Context) {
 		return
 	}
 
-	// TODO: Получить statusFilter из query параметров, если нужно
-	var statusFilter *int // Пока nil
+	// Получаем statusFilter из query параметров
+	statusFilter := GetIntQueryParam(c, "status")
 
-	// Получение заявок подразделения из сервиса
-	vacations, err := h.vacationService.GetDepartmentVacations(departmentID, year, statusFilter) // Добавлен statusFilter
+	// Получение заявок орг. юнита из сервиса
+	vacations, err := h.vacationService.GetOrganizationalUnitVacations(unitID, year, statusFilter) // GetDepartmentVacations -> GetOrganizationalUnitVacations, departmentID -> unitID
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения заявок подразделения: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения заявок орг. юнита: " + err.Error()}) // Обновлено сообщение
 		return
 	}
 
@@ -285,7 +292,7 @@ func (h *AppHandler) GetAllVacations(c *gin.Context) {
 	yearFilter := GetIntQueryParam(c, "year")
 	statusFilter := GetIntQueryParam(c, "status")
 	userIDFilter := GetIntQueryParam(c, "userId")
-	departmentIDFilter := GetIntQueryParam(c, "departmentId")
+	unitIDFilter := GetIntQueryParam(c, "unitId") // departmentId -> unitId
 
 	// Если год не указан, можно использовать текущий или требовать параметр
 	if yearFilter == nil {
@@ -297,10 +304,10 @@ func (h *AppHandler) GetAllVacations(c *gin.Context) {
 	}
 
 	// Вызываем сервис для получения всех заявок с учетом прав и фильтров
-	vacations, err := h.vacationService.GetAllUserVacations(requestingUserID.(int), yearFilter, statusFilter, userIDFilter, departmentIDFilter)
+	vacations, err := h.vacationService.GetAllUserVacations(requestingUserID.(int), yearFilter, statusFilter, userIDFilter, unitIDFilter) // departmentIDFilter -> unitIDFilter
 	if err != nil {
 		// Обрабатываем ошибки прав доступа или другие ошибки сервиса
-		if err.Error() == "недостаточно прав для просмотра всех заявок" || err.Error() == "менеджер может просматривать заявки только своего отдела" {
+		if err.Error() == "недостаточно прав для просмотра всех заявок" || err.Error() == "менеджер может просматривать заявки только своего организационного юнита" { // Обновлено сообщение об ошибке
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения списка заявок: " + err.Error()})
@@ -506,12 +513,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	// Структура для входящих данных (PascalCase как ожидает фронтенд/валидатор)
 	// Username заменено на Login, убрана валидация email для Login
 	var input struct {
-		Login           string `json:"Login" binding:"required"` // username -> Login (PascalCase)
-		Password        string `json:"Password" binding:"required"`
-		ConfirmPassword string `json:"ConfirmPassword" binding:"required"`
-		FullName        string `json:"FullName" binding:"required"`
-		Email           string `json:"Email" binding:"required"` // Оставляем Email, но без валидации email
-		PositionID      *int   `json:"PositionID"`               // Оставляем PositionID в PascalCase
+		Login                string `json:"Login" binding:"required"` // username -> Login (PascalCase)
+		Password             string `json:"Password" binding:"required"`
+		ConfirmPassword      string `json:"ConfirmPassword" binding:"required"`
+		FullName             string `json:"FullName" binding:"required"`
+		Email                string `json:"Email" binding:"required"` // Оставляем Email, но без валидации email
+		PositionID           *int   `json:"PositionID"`               // Оставляем PositionID в PascalCase
+		OrganizationalUnitID *int   `json:"OrganizationalUnitID"`     // Добавлено поле для орг. юнита
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -527,8 +535,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Вызов сервиса регистрации - передаем input.Login как login
-	user, err := h.authService.Register(input.Login, input.Password, input.FullName, input.Email, input.PositionID)
+	// Вызов сервиса регистрации - передаем input.Login как login и OrganizationalUnitID
+	user, err := h.authService.Register(input.Login, input.Password, input.FullName, input.PositionID, input.OrganizationalUnitID) // Удален input.Email, Добавлен input.OrganizationalUnitID
 	if err != nil {
 		// Обработка ошибок сервиса (например, пользователь уже существует)
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()}) // Используем 409 Conflict для дубликата
@@ -539,15 +547,154 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, user)
 }
 
-// GetPositions - обработчик для получения списка должностей
+// GetPositions обработчик для получения списка должностей (публичный)
 func (h *AppHandler) GetPositions(c *gin.Context) {
-	positions, err := h.userService.GetAllPositionsGrouped()
+	positions, err := h.userService.GetAllPositions() // Используем userService
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения списка должностей: " + err.Error()})
 		return
 	}
+
+	// Раньше возвращались группы, теперь просто список
+	// Если фронтенд ожидает группы, нужно либо изменить фронтенд,
+	// либо сгруппировать здесь (менее предпочтительно).
+	// Пока возвращаем плоский список.
 	c.JSON(http.StatusOK, positions)
 }
+
+// --- Organizational Unit Handlers ---
+
+// CreateOrganizationalUnit обработчик для создания нового орг. юнита (Admin only)
+func (h *AppHandler) CreateOrganizationalUnit(c *gin.Context) {
+	var unit models.OrganizationalUnit
+	if err := c.ShouldBindJSON(&unit); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные: " + err.Error()})
+		return
+	}
+
+	createdUnit, err := h.unitService.CreateUnit(&unit)
+	if err != nil {
+		// TODO: Различать ошибки валидации (400) и ошибки сервера (500)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания организационного юнита: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, createdUnit)
+}
+
+// GetOrganizationalUnitTree обработчик для получения дерева орг. юнитов
+func (h *AppHandler) GetOrganizationalUnitTree(c *gin.Context) {
+	tree, err := h.unitService.GetUnitTree()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения дерева организационных юнитов: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tree)
+}
+
+// GetOrganizationalUnitByID обработчик для получения орг. юнита по ID
+func (h *AppHandler) GetOrganizationalUnitByID(c *gin.Context) {
+	unitIDStr := c.Param("id")
+	unitID, err := strconv.Atoi(unitIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID орг. юнита"})
+		return
+	}
+
+	unit, err := h.unitService.GetUnitByID(unitID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения организационного юнита: " + err.Error()})
+		return
+	}
+	if unit == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Организационный юнит не найден"})
+		return
+	}
+
+	c.JSON(http.StatusOK, unit)
+}
+
+// UpdateOrganizationalUnit обработчик для обновления орг. юнита (Admin only)
+func (h *AppHandler) UpdateOrganizationalUnit(c *gin.Context) {
+	unitIDStr := c.Param("id")
+	unitID, err := strconv.Atoi(unitIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID орг. юнита"})
+		return
+	}
+
+	var updateData models.OrganizationalUnit
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные для обновления: " + err.Error()})
+		return
+	}
+
+	updatedUnit, err := h.unitService.UpdateUnit(unitID, &updateData)
+	if err != nil {
+		// TODO: Различать ошибки (не найдено 404, валидация 400, сервер 500)
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "не найден") {
+			statusCode = http.StatusNotFound
+		} else if strings.Contains(err.Error(), "не может быть родителем") || strings.Contains(err.Error(), "не найден") { // Уточнить ошибки валидации
+			statusCode = http.StatusBadRequest
+		}
+		c.JSON(statusCode, gin.H{"error": "Ошибка обновления организационного юнита: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, updatedUnit)
+}
+
+// DeleteOrganizationalUnit обработчик для удаления орг. юнита (Admin only)
+func (h *AppHandler) DeleteOrganizationalUnit(c *gin.Context) {
+	unitIDStr := c.Param("id")
+	unitID, err := strconv.Atoi(unitIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID орг. юнита"})
+		return
+	}
+
+	err = h.unitService.DeleteUnit(unitID)
+	if err != nil {
+		// TODO: Различать ошибки (не найдено 404, конфликт 409/400, сервер 500)
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "не найден") {
+			statusCode = http.StatusNotFound
+		}
+		// Добавить проверку на конфликт (например, если есть дочерние) -> 409 Conflict или 400 Bad Request
+		c.JSON(statusCode, gin.H{"error": "Ошибка удаления организационного юнита: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Организационный юнит успешно удален"})
+}
+
+// GetUnitChildrenHandler обработчик для получения дочерних элементов (юнитов и пользователей)
+func (h *AppHandler) GetUnitChildrenHandler(c *gin.Context) {
+	parentIDStr := c.Query("parentId") // Получаем parentId из query-параметра
+
+	var parentID *int
+	if parentIDStr != "" {
+		id, err := strconv.Atoi(parentIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный parentId"})
+			return
+		}
+		parentID = &id
+	} // Если parentIDStr пустой, parentID остается nil (для корневых элементов)
+
+	// Вызываем новый метод сервиса
+	items, err := h.unitService.GetUnitChildrenAndUsers(parentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения дочерних элементов: " + err.Error()})
+		return
+	}
+
+	// Возвращаем список элементов (может быть пустым)
+	c.JSON(http.StatusOK, items)
+}
+
+// --- User Profile Handler ---
 
 // UpdateUserProfile - обработчик для обновления профиля пользователя
 func (h *AppHandler) UpdateUserProfile(c *gin.Context) {
@@ -610,4 +757,129 @@ func (h *AppHandler) UpdateUserProfile(c *gin.Context) {
 	// Можно вернуть обновленные данные пользователя, если сервис их возвращает,
 	// или просто сообщение об успехе.
 	c.JSON(http.StatusOK, gin.H{"message": "Профиль пользователя успешно обновлен"})
+}
+
+// GetMyProfile - обработчик для получения профиля текущего пользователя
+func (h *AppHandler) GetMyProfile(c *gin.Context) {
+	// Получаем ID пользователя из контекста
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	userID := userIDVal.(int)
+
+	// Вызываем сервис для получения профиля
+	profile, err := h.userService.GetUserProfile(userID)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "не найден") {
+			statusCode = http.StatusNotFound
+		}
+		c.JSON(statusCode, gin.H{"error": "Ошибка получения профиля: " + err.Error()})
+		return
+	}
+
+	// Возвращаем профиль
+	c.JSON(http.StatusOK, profile)
+}
+
+// GetUnitUsersWithLimitsHandler обработчик для получения пользователей юнита с лимитами отпуска (Admin only)
+func (h *AppHandler) GetUnitUsersWithLimitsHandler(c *gin.Context) {
+	// Проверяем права администратора
+	isAdmin, exists := c.Get("isAdmin")
+	if !exists || !isAdmin.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права администратора"})
+		return
+	}
+
+	// Получаем ID юнита из URL (теперь параметр называется "id")
+	unitIDStr := c.Param("id") // Изменено с "unitId" на "id"
+	unitID, err := strconv.Atoi(unitIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID орг. юнита"})
+		return
+	}
+
+	// Получаем год из query параметра
+	yearStr := c.Query("year")
+	if yearStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Параметр 'year' обязателен"})
+		return
+	}
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат года"})
+		return
+	}
+
+	// Вызываем сервис для получения пользователей с лимитами
+	usersWithLimits, err := h.unitService.GetUnitUsersWithLimits(unitID, year)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "не найден") { // Проверяем, если юнит не найден
+			statusCode = http.StatusNotFound
+		}
+		c.JSON(statusCode, gin.H{"error": "Ошибка получения пользователей юнита с лимитами: " + err.Error()})
+		return
+	}
+
+	// Если лимиты не найдены для некоторых пользователей, поле TotalDays будет nil.
+	// Здесь можно установить значение по умолчанию, если это требуется для фронтенда.
+	// Например:
+	// for i := range usersWithLimits {
+	// 	if usersWithLimits[i].TotalDays == nil {
+	// 		defaultValue := 28 // Значение по умолчанию
+	// 		usersWithLimits[i].TotalDays = &defaultValue
+	// 	}
+	// }
+
+	c.JSON(http.StatusOK, usersWithLimits)
+}
+
+// UpdateUserVacationLimitHandler обработчик для обновления лимита отпуска пользователя (Admin only)
+func (h *AppHandler) UpdateUserVacationLimitHandler(c *gin.Context) {
+	// Проверяем права администратора
+	isAdmin, exists := c.Get("isAdmin")
+	if !exists || !isAdmin.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права администратора"})
+		return
+	}
+
+	// Получаем ID пользователя из URL
+	userIDStr := c.Param("userId") // Используем userId из роута
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID пользователя"})
+		return
+	}
+
+	// Структура для данных из тела запроса
+	var input struct {
+		Year      int `json:"year" binding:"required"`
+		TotalDays int `json:"total_days"` // Не используем binding:"required", чтобы позволить 0
+	}
+
+	// Привязываем JSON из тела запроса
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные: " + err.Error()})
+		return
+	}
+
+	// Проверяем total_days на отрицательное значение (0 разрешен)
+	if input.TotalDays < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Количество дней отпуска не может быть отрицательным"})
+		return
+	}
+
+	// Вызываем сервис VacationService для установки (создания/обновления) лимита
+	err = h.vacationService.SetVacationLimit(userID, input.Year, input.TotalDays)
+	if err != nil {
+		// Обрабатываем возможные ошибки сервиса
+		// (ошибка БД, но валидация на отрицательные дни уже сделана)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка установки лимита отпуска: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Лимит отпуска пользователя успешно обновлен"})
 }

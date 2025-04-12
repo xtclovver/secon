@@ -103,42 +103,42 @@ export const getMyVacations = async (year, status = null) => {
 };
 
 /**
- * Получение заявок сотрудников подразделения (для руководителя)
- * @param {number} departmentId - ID подразделения
+ * Получение заявок сотрудников организационного юнита (для руководителя/админа)
+ * @param {number} unitId - ID организационного юнита
  * @param {number} year - Год
  * @param {number | null} [status] - Опциональный ID статуса для фильтрации
- * @returns {Promise<Array>} - Список заявок сотрудников подразделения
+ * @returns {Promise<Array>} - Список заявок сотрудников юнита
  * @throws {Error} - В случае ошибки запроса
  */
-export const getDepartmentVacations = async (departmentId, year, status = null) => {
+export const getUnitVacations = async (unitId, year, status = null) => { // Renamed function and parameter
   try {
     const params = { year };
     if (status !== null) {
       params.status = status;
     }
-    // departmentId передается как параметр пути
-    const response = await authApi.get(`/vacations/department/${departmentId}`, { params });
+    // unitId передается как параметр пути, исправлен URL
+    const response = await authApi.get(`/vacations/unit/${unitId}`, { params }); 
     return response.data;
   } catch (error) {
-    console.error("API Error in getDepartmentVacations:", error);
+    console.error("API Error in getUnitVacations:", error); // Renamed function in log
     if (error.response && error.response.data && error.response.data.error) {
       throw new Error(error.response.data.error);
     }
-    throw new Error('Не удалось получить заявки сотрудников подразделения.');
+    throw new Error('Не удалось получить заявки сотрудников подразделения.'); // Error message remains the same for user
   }
 };
 
 /**
  * Получение пересечений отпусков в подразделении (для руководителя)
- * @param {number} departmentId - ID подразделения
+ * @param {number} unitId - ID организационного юнита
  * @param {number} year - Год
  * @returns {Promise<Array>} - Список пересечений
  * @throws {Error} - В случае ошибки запроса
  */
-export const getVacationIntersections = async (departmentId, year) => {
+export const getVacationIntersections = async (unitId, year) => { // Renamed parameter
   try {
     const response = await authApi.get('/vacations/intersections', {
-      params: { departmentId, year } // departmentId передается как query параметр
+      params: { unitId, year } // Renamed query parameter to unitId
     });
     return response.data;
   } catch (error) {

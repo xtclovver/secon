@@ -36,8 +36,9 @@ const AdminDashboard = lazy(() => import('./pages/dashboard/AdminDashboard'));
 const VacationForm = lazy(() => import('./pages/vacations/VacationForm'));
 const VacationsList = lazy(() => import('./pages/vacations/VacationsList')); // Будет создан позже
 const VacationCalendar = lazy(() => import('./pages/vacations/VacationCalendar')); // Будет создан позже
-const UserProfilePage = lazy(() => import('./pages/profile/UserProfilePage')); // Добавляем страницу профиля
-const NotFoundPage = lazy(() => import('./pages/NotFoundPage')); // Будет создан позже
+const UserProfilePage = lazy(() => import('./pages/profile/UserProfilePage'));
+const DepartmentManagementPage = lazy(() => import('./pages/admin/DepartmentManagementPage')); // Добавляем новую страницу
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 // Компонент-обертка для основного макета приложения
 const MainLayout = () => (
@@ -281,11 +282,18 @@ const App = () => {
                          <Route
                            path="/admin/dashboard"
                            element={
-                             user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" replace />
-                           }
-                         />
-                      </Route> {/* Конец MainLayout */}
-                    </Route> {/* Конец ProtectedRoute */}
+                              user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" replace />
+                            }
+                          />
+                          {/* Новый маршрут для управления подразделениями (только админ) */}
+                          <Route
+                            path="/admin/units"
+                            element={
+                              user?.isAdmin ? <DepartmentManagementPage /> : <Navigate to="/dashboard" replace />
+                            }
+                          />
+                       </Route> {/* Конец MainLayout */}
+                     </Route> {/* Конец ProtectedRoute */}
                       
                     {/* Маршрут 404 (вне MainLayout, но можно и внутри, если нужен хедер/футер) */}
                     <Route path="*" element={<NotFoundPage />} />

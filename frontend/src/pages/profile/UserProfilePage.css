@@ -100,6 +100,66 @@
   text-align: center;
 }
 
+/* Стили для информации об орг. структуре */
+.profile-info p strong {
+  /* Можно сделать цвет немного другим для выделения */
+  /* color: var(--accent-color); */
+  min-width: 120px; /* Минимальная ширина для выравнивания */
+  display: inline-block; /* Чтобы min-width работал */
+}
+
+/* Дополнительный отступ для строк с орг. структурой */
+.profile-info p:has(strong:contains("Департамент")),
+.profile-info p:has(strong:contains("Подотдел")),
+.profile-info p:has(strong:contains("Сектор")) {
+  margin-left: 1rem; /* Небольшой отступ слева */
+  border-left: 2px solid var(--primary-color-light); /* Линия слева для визуальной группировки */
+  padding-left: 0.8rem;
+}
+
+/* Стили для бейджей ролей */
+.role-badge {
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  font-size: 0.85em;
+  font-weight: bold;
+  border-radius: 4px;
+  margin-right: 0.5em;
+}
+
+.admin-badge {
+  background-color: var(--warning-color); /* Оранжевый для админа */
+  color: white;
+}
+
+.manager-badge {
+  background-color: var(--info-color); /* Синий для менеджера */
+  color: white;
+}
+
+/* Стили для бейджей должностей */
+.user-position-badge {
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  font-size: 0.9em;
+  border-radius: 4px;
+  color: white; /* Белый текст для всех */
+}
+
+/* Уровни должностей */
+.position-level-0 {
+  background-color: var(--info-color); /* Синий - обычный */
+}
+.position-level-1 {
+  background-color: var(--success-color); /* Зеленый - специалист/инженер */
+}
+.position-level-2 {
+  background-color: var(--warning-color); /* Оранжевый - старший/менеджер */
+}
+.position-level-3 {
+  background-color: var(--error-color); /* Красный - руководитель/директор */
+}
+
 /* Стили для кнопки сохранения */
 .save-button {
   display: inline-block;

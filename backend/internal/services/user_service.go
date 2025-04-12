@@ -9,10 +9,13 @@ import (
 // UserServiceInterface определяет методы для сервиса пользователей
 type UserServiceInterface interface {
 	GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error)
-	GetAllPositionsGrouped() ([]models.PositionGroup, error) // Добавлен метод для получения должностей
+	// GetAllPositionsGrouped удален
+	GetUsersByOrganizationalUnit(unitID int) ([]models.User, error) // Добавлен метод
+	GetAllPositions() ([]models.Position, error)                    // Добавлен метод для получения должностей
 	// UpdateUserProfile обновляет профиль пользователя с проверкой прав доступа
 	UpdateUserProfile(requestingUser *models.User, targetUserID int, updateData *models.UserUpdateDTO) error
-	// TODO: Добавить другие методы сервиса пользователей по мере необходимости
+	GetUserProfile(userID int) (*models.UserProfileDTO, error) // Новый метод для получения профиля
+	// TODO: Добавить другие методы сервиса пользователей по мере необходимости (GetUserByID и т.д.)
 }
 
 // UserService реализует UserServiceInterface
@@ -40,16 +43,22 @@ func (s *UserService) GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO
 	return users, nil
 }
 
-// GetAllPositionsGrouped получает список всех должностей, сгруппированных по категориям
-func (s *UserService) GetAllPositionsGrouped() ([]models.PositionGroup, error) {
-	positions, err := s.userRepo.GetAllPositionsGrouped()
+// GetUsersByOrganizationalUnit получает пользователей по ID орг. юнита
+func (s *UserService) GetUsersByOrganizationalUnit(unitID int) ([]models.User, error) {
+	return s.userRepo.GetUsersByOrganizationalUnit(unitID)
+}
+
+// GetAllPositions получает список всех должностей
+func (s *UserService) GetAllPositions() ([]models.Position, error) {
+	positions, err := s.userRepo.GetAllPositions()
 	if err != nil {
-		// Можно добавить логирование ошибки здесь
 		return nil, fmt.Errorf("ошибка получения должностей из репозитория: %w", err)
 	}
-	// На данный момент дополнительной бизнес-логики нет
+	// Пока просто возвращаем результат репозитория
 	return positions, nil
 }
+
+// GetAllPositionsGrouped удален
 
 // UpdateUserProfile обновляет профиль пользователя с проверкой прав доступа
 func (s *UserService) UpdateUserProfile(requestingUser *models.User, targetUserID int, updateData *models.UserUpdateDTO) error {
@@ -87,6 +96,13 @@ func (s *UserService) UpdateUserProfile(requestingUser *models.User, targetUserI
 	if updateData.PositionID != nil && canManageUsers {
 		hasUpdates = true
 	}
+	// Добавлено обновление OrganizationalUnitID
+	if updateData.OrganizationalUnitID != nil {
+		if !canManageUsers { // Только админ/менеджер могут менять юнит
+			return fmt.Errorf("недостаточно прав для изменения организационного юнита пользователя")
+		}
+		hasUpdates = true
+	}
 
 	if !hasUpdates {
 		return fmt.Errorf("нет допустимых полей для обновления")
@@ -100,6 +116,21 @@ func (s *UserService) UpdateUserProfile(requestingUser *models.User, targetUserI
 	}
 
 	return nil
+}
+
+// GetUserProfile получает профиль пользователя по ID, включая иерархию юнитов
+func (s *UserService) GetUserProfile(userID int) (*models.UserProfileDTO, error) {
+	profile, err := s.userRepo.GetUserProfileByID(userID)
+	if err != nil {
+		// Можно добавить логирование здесь
+		return nil, fmt.Errorf("ошибка получения профиля пользователя ID %d из репозитория: %w", userID, err)
+	}
+	if profile == nil {
+		// Репозиторий вернул nil без ошибки, значит пользователь не найден
+		return nil, fmt.Errorf("пользователь с ID %d не найден", userID) // Возвращаем ошибку, а не nil, nil
+	}
+	// Дополнительная бизнес-логика, если нужна
+	return profile, nil
 }
 
 // TODO: Реализовать другие методы бизнес-логики для пользователей
