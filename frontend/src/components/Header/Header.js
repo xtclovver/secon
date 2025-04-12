@@ -104,7 +104,8 @@ const Header = () => {
               exit="exit"
             >
               <nav className="mobile-nav">
-                <NavLink to="/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Дашборд</NavLink>
+                {/* Возвращаем /dashboard, так как маршрут теперь существует */}
+                <NavLink to="/dashboard" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Дашборд</NavLink> 
                 <NavLink to="/vacations/new" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Оформить отпуск</NavLink>
                 <NavLink to="/vacations/list" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Мои заявки</NavLink>
                 <NavLink to="/vacations/calendar" onClick={closeMobileMenu} className={({isActive}) => isActive ? "active" : ""}>Календарь</NavLink>

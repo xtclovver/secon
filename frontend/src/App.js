@@ -27,7 +27,8 @@ const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
 
 // Other pages (lazy loading)
-const UserDashboard = lazy(() => import('./pages/dashboard/UserDashboard'));
+// const UserDashboard = lazy(() => import('./pages/dashboard/UserDashboard')); // Больше не используется напрямую
+const UniversalDashboard = lazy(() => import('./pages/dashboard/UniversalDashboard')); // Добавляем универсальный дашборд
 const ManagerDashboard = lazy(() => import('./pages/dashboard/ManagerDashboard'));
 const AdminDashboard = lazy(() => import('./pages/dashboard/AdminDashboard'));
 const VacationForm = lazy(() => import('./pages/vacations/VacationForm'));
@@ -141,27 +142,19 @@ const App = () => {
 
                        {/* Protected Routes */}
                       <Route element={<ProtectedRoute />}>
-                        {/* Перенаправление на соответствующий дашборд */}
+                        {/* Перенаправление с главной на дашборд */}
                         <Route 
                           path="/" 
-                          element={ // Перенаправляем на /profile как на стандартную страницу после логина, если не админ/менеджер
+                          element={
                             <Navigate
-                              to={
-                                !user
-                                  ? "/login" // Если вдруг user null
-                                  : user.role === 'admin' // Используем role из UserContext
-                                    ? "/admin/dashboard"
-                                    : user.role === 'manager'
-                                      ? "/manager/dashboard"
-                                      : "/profile" // Стандартный пользователь идет в профиль
-                              }
+                              to={user ? "/dashboard" : "/login"} // Всегда на /dashboard если залогинен
                               replace
                             />
-                          }
+                          } 
                         />
 
                         {/* Маршруты для всех аутентифицированных пользователей */}
-                        {/* <Route path="/dashboard" element={<UserDashboard />} /> - Убираем общий /dashboard, используем /profile */}
+                        <Route path="/dashboard" element={<UniversalDashboard />} /> {/* Добавляем маршрут для универсального дашборда */}
                         <Route path="/vacations/new" element={<VacationForm />} />
                         <Route path="/vacations/list" element={<VacationsList />} />
                         <Route path="/vacations/calendar" element={<VacationCalendar />} />
