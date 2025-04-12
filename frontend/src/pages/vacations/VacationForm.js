@@ -23,8 +23,25 @@ const VacationForm = () => {
   const [errors, setErrors] = useState({});
   const [requestId, setRequestId] = useState(null); // Для сохранения ID черновика (если нужно)
 
-  // Удаляем useEffect, который проверял флаг 'loaded' и мешал обновлению
-  // useEffect(() => { ... }, [user, year, refreshUserVacationLimits, limitsLoading]);
+  // useEffect для принудительной перезагрузки данных при монтировании или изменении ключевых зависимостей
+  useEffect(() => {
+    // Цель: Загрузить/обновить лимиты для ТЕКУЩЕГО выбранного года (`year`)
+    // когда компонент монтируется ИЛИ когда пользователь/год меняется.
+    // Всегда вызываем refreshUserVacationLimits, если пользователь доступен и загрузка не идет.
+    if (user && !limitsLoading) {
+      console.log(`useEffect[user, year, limitsLoading]: Triggering refreshUserVacationLimits for year ${year}...`);
+      refreshUserVacationLimits(year);
+    } else if (!user) {
+      console.warn("useEffect[user, year, limitsLoading]: Cannot refresh limits: user context is not available.");
+    } else if (limitsLoading) {
+      console.log(`useEffect[user, year, limitsLoading]: Limits are already loading for year ${year}.`);
+    }
+    // Зависимости: year (чтобы сработало при смене года),
+    // refreshUserVacationLimits (стабильная функция из context).
+    // Убрали user и limitsLoading, чтобы избежать бесконечного цикла.
+    // Проверка user и limitsLoading выполняется внутри эффекта.
+  }, [year, refreshUserVacationLimits]); // Измененный массив зависимостей
+
 
   // --- Получение данных о лимитах из контекста ---
   const limitsData = user?.vacationLimits?.[year];
