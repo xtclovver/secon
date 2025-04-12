@@ -3,8 +3,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 90vh;
-  background: linear-gradient(135deg, var(--background-gradient-start, #f5f7fa), var(--background-gradient-end, #c3cfe2));
+  min-height: 90vh; /* Оставляем 90vh, чтобы не прилипало к футеру, если он есть */
+  background: var(--bg-primary); /* Используем основной фон темы */
+  /* background: linear-gradient(135deg, var(--bg-primary), var(--bg-tertiary)); - Вариант с градиентом темы */
   padding: 20px;
   overflow-y: auto; /* Allow scrolling if content overflows */
 }
@@ -14,7 +15,7 @@
   max-width: 420px;
   width: 90%;
   /* min-height will be set by specific page styles */
-  background-color: var(--card-background-color, #ffffff);
+  background-color: var(--bg-secondary); /* Исправлено: Используем переменную темы */
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   overflow: hidden; /* Keep overflow hidden for rounded corners */
@@ -128,8 +129,9 @@
     padding: 12px 20px; /* Adjusted padding */
     border: none;
     border-radius: 6px;
-    background: linear-gradient(135deg, var(--primary-color, #007bff), var(--primary-dark-color, #0056b3));
-    color: white;
+    /* Используем переменные акцентного цвета темы */
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+    color: white; /* Белый текст обычно хорошо читается на синем */
     font-size: 1em; /* Adjusted size */
     font-weight: 600;
     cursor: pointer;
@@ -160,7 +162,7 @@
   margin-top: 20px; /* Adjusted spacing */
   padding: 8px 12px; /* Adjusted padding */
   background-color: transparent;
-  color: var(--primary-color, #007bff);
+  color: var(--accent-color); /* Исправлено: Используем переменную темы */
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -172,8 +174,9 @@
 }
 
 .toggle-link:hover {
-  background-color: var(--primary-color-light-hover, rgba(0, 123, 255, 0.1));
-  color: var(--primary-dark-color, #0056b3);
+  /* background-color: var(--primary-color-light-hover, rgba(0, 123, 255, 0.1)); - Можно убрать или заменить */
+  background-color: rgba(var(--accent-color-rgb, 13, 110, 253), 0.1); /* Используем RGB для прозрачности */
+  color: var(--accent-hover); /* Исправлено: Используем переменную темы */
   text-decoration: none; /* Ensure no underline on hover */
 }
 

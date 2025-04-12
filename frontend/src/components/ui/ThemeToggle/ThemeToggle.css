@@ -9,7 +9,7 @@
   width: 48px;
   height: 24px;
   border-radius: 30px;
-  background-color: #cbd5e0;
+  background-color: var(--bg-tertiary); /* Исправлено */
   position: relative;
   display: flex;
   align-items: center;
@@ -25,13 +25,13 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background-color: #ffffff;
+  background-color: var(--bg-secondary); /* Исправлено */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: transform 0.3s ease, background-color 0.3s ease;
 }
 
 .toggle-icon {
-  color: #ffffff;
+  /* color: #ffffff; - Убрано, так как иконки имеют свои цвета */
   font-size: 12px;
   z-index: 1;
   transition: opacity 0.3s ease;
@@ -53,12 +53,12 @@
 
 /* Темная тема */
 [data-theme="dark"] .toggle-track {
-  background-color: #2d3748;
+  background-color: var(--bg-tertiary); /* Исправлено - используем ту же переменную, что и для светлой темы, она переопределяется */
 }
 
 /* Смещение для темной темы */
 [data-theme="dark"] .toggle-thumb {
-  background-color: #1a202c;
+  background-color: var(--bg-secondary); /* Исправлено - используем ту же переменную */
   transform: translateX(24px); /* 48px (ширина) - 20px (ширина кружка) - 2*2px (отступы) = 24px */
 }
 

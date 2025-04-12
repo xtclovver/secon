@@ -97,17 +97,17 @@ const UniversalDashboard = () => {
           grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Адаптивные колонки */
         }
         .dashboard-section {
-          border: 1px solid var(--border-color, #ccc); /* Используем переменную или дефолтный цвет */
+          border: 1px solid var(--border-color); /* Используем переменную темы */
           border-radius: 8px;
           padding: 15px;
-          background-color: var(--background-secondary, #f9f9f9); /* Используем переменную или дефолтный цвет */
+          background-color: var(--bg-secondary); /* Исправлено: Используем переменную темы */
         }
         .dashboard-section h3 {
           margin-top: 0;
           margin-bottom: 15px;
           display: flex;
           align-items: center;
-          color: var(--text-color-primary, #333);
+          color: var(--text-primary); /* Исправлено: Используем переменную темы */
         }
         .dashboard-section ul {
           list-style: none;
@@ -119,13 +119,13 @@ const UniversalDashboard = () => {
         }
         .dashboard-section a {
           text-decoration: none;
-          color: var(--primary-color, #007bff); /* Используем переменную или дефолтный цвет */
+          color: var(--accent-color); /* Исправлено: Используем переменную темы */
           display: flex;
           align-items: center;
           transition: color 0.2s ease;
         }
         .dashboard-section a:hover {
-          color: var(--primary-color-dark, #0056b3); /* Используем переменную или дефолтный цвет */
+          color: var(--accent-hover); /* Исправлено: Используем переменную темы */
         }
         .manager-actions {
             border-left: 5px solid orange; /* Пример выделения секции */

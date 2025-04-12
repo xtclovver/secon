@@ -17,7 +17,8 @@ import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'; // Ис
 import Header from './components/Header/Header'; // Исправлен путь
 import Sidebar from './components/Sidebar/Sidebar'; // Исправлен путь
 import Footer from './components/Footer/Footer'; // Исправлен путь
-import Loader from './components/ui/Loader/Loader'; 
+import Loader from './components/ui/Loader/Loader';
+import { Outlet } from 'react-router-dom'; // Импортируем Outlet
 
 // Сервисы (перемещены выше)
 import { isAuthenticated, getCurrentUser, logout } from './api/auth';
@@ -38,6 +39,22 @@ const VacationCalendar = lazy(() => import('./pages/vacations/VacationCalendar')
 const UserProfilePage = lazy(() => import('./pages/profile/UserProfilePage')); // Добавляем страницу профиля
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage')); // Будет создан позже
 
+// Компонент-обертка для основного макета приложения
+const MainLayout = () => (
+  <>
+    <Header />
+    <div className="app-container">
+      <Sidebar />
+      <main className="app-content">
+        {/* Suspense нужен здесь, если дочерние компоненты тяжелые */}
+        <Suspense fallback={<Loader />}>
+           <Outlet /> {/* Здесь будут рендериться дочерние защищенные маршруты */}
+        </Suspense>
+      </main>
+    </div>
+    <Footer />
+  </>
+);
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -173,77 +190,72 @@ const App = () => {
               pauseOnHover
               theme="colored" // Используем цветные уведомления
             />
-
-            {/* Отображаем Header и Sidebar только если пользователь аутентифицирован */}
-            {isAuthenticated() && user && <Header />} 
             
-            <div className="app-container">
-              {isAuthenticated() && user && <Sidebar />}
-              
-              <main className="app-content">
-                {/* Suspense для обработки ленивой загрузки компонентов */}
-                <Suspense fallback={<Loader />}> 
-                  <AnimatePresence mode="wait">
-                    <Routes>
-                      {/* Общедоступные маршруты */}
-                      {/* Auth Routes */}
-                      <Route
-                        path="/login"
-                        // Если пользователь аутентифицирован, перенаправляем на профиль (или дашборд)
-                        element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <LoginPage />}
-                      />
-                      <Route
-                        path="/register"
-                         // Если пользователь аутентифицирован, перенаправляем на профиль (или дашборд)
-                        element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <RegisterPage />}
-                      />
+            {/* Suspense для обработки ленивой загрузки страниц */}
+            <Suspense fallback={<Loader />}>
+               <AnimatePresence mode="wait">
+                  <Routes>
+                    {/* Auth Routes (вне MainLayout) */}
+                    <Route
+                      path="/login"
+                      element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <LoginPage />}
+                    />
+                    <Route
+                      path="/register"
+                      element={isAuthenticated() && user ? <Navigate to="/profile" replace /> : <RegisterPage />}
+                    />
 
-                       {/* Protected Routes */}
-                      <Route element={<ProtectedRoute />}>
-                        {/* Перенаправление с главной на дашборд */}
-                        <Route 
-                          path="/" 
-                          element={
-                            <Navigate
-                              to={user ? "/dashboard" : "/login"} // Всегда на /dashboard если залогинен
-                              replace
-                            />
-                          } 
-                        />
+                    {/* Protected Routes (внутри MainLayout) */}
+                    {/* Обертка ProtectedRoute проверяет аутентификацию */}
+                    <Route element={<ProtectedRoute />}>
+                      {/* MainLayout применяется ко всем вложенным маршрутам */}
+                      <Route element={<MainLayout />}>
+                         {/* Перенаправление с главной на дашборд */}
+                         <Route 
+                           path="/" 
+                           element={
+                             <Navigate
+                               to="/dashboard" // Всегда на /dashboard если залогинен и прошел ProtectedRoute
+                               replace
+                             />
+                           } 
+                         />
+                         {/* Остальные защищенные маршруты */}
+                         <Route path="/dashboard" element={<UniversalDashboard />} />
+                         <Route path="/vacations/new" element={<VacationForm />} />
+                         <Route path="/vacations/list" element={<VacationsList />} />
+                         <Route path="/vacations/calendar" element={<VacationCalendar />} />
+                         <Route path="/profile" element={<UserProfilePage />} />
+                         {/* Маршруты для всех аутентифицированных пользователей */}
+                         <Route path="/dashboard" element={<UniversalDashboard />} />
+                         <Route path="/vacations/new" element={<VacationForm />} />
+                         <Route path="/vacations/list" element={<VacationsList />} />
+                         <Route path="/vacations/calendar" element={<VacationCalendar />} />
+                         <Route path="/profile" element={<UserProfilePage />} />
 
-                        {/* Маршруты для всех аутентифицированных пользователей */}
-                        <Route path="/dashboard" element={<UniversalDashboard />} /> {/* Добавляем маршрут для универсального дашборда */}
-                        <Route path="/vacations/new" element={<VacationForm />} />
-                        <Route path="/vacations/list" element={<VacationsList />} />
-                        <Route path="/vacations/calendar" element={<VacationCalendar />} />
-                        <Route path="/profile" element={<UserProfilePage />} /> {/* Добавляем маршрут для профиля */}
-                        
-                        {/* Маршруты для руководителей (дополнительная проверка роли) */}
-                        <Route
-                          path="/manager/dashboard"
-                          element={ // Проверяем роль менеджера
-                            user?.role === 'manager' ? <ManagerDashboard /> : <Navigate to="/profile" replace />
-                          }
-                        />
+                         {/* Маршруты для руководителей (дополнительная проверка роли) */}
+                         <Route
+                           path="/manager/dashboard"
+                           element={
+                             user?.role === 'manager' ? <ManagerDashboard /> : <Navigate to="/dashboard" replace />
+                           }
+                         />
 
-                        {/* Маршруты для администраторов (дополнительная проверка роли) */}
-                        <Route
-                          path="/admin/dashboard"
-                          element={ // ИЗМЕНЕНО: Проверяем isAdmin вместо role
-                            user?.isAdmin ? <AdminDashboard /> : <Navigate to="/profile" replace /> 
-                          }
-                        />
-                      </Route>
+                         {/* Маршруты для администраторов (дополнительная проверка роли) */}
+                         <Route
+                           path="/admin/dashboard"
+                           element={
+                             user?.isAdmin ? <AdminDashboard /> : <Navigate to="/dashboard" replace />
+                           }
+                         />
+                      </Route> {/* Конец MainLayout */}
+                    </Route> {/* Конец ProtectedRoute */}
                       
-                      {/* Маршрут для страницы 404 */}
-                      <Route path="*" element={<NotFoundPage />} />
-                    </Routes>
-                  </AnimatePresence>
-                </Suspense>
-              </main>
-            </div>
-            
-            {isAuthenticated() && user && <Footer />}
+                    {/* Маршрут 404 (вне MainLayout, но можно и внутри, если нужен хедер/футер) */}
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+               </AnimatePresence>
+             </Suspense>
           </div>
         </Router>
       </UserProvider>
