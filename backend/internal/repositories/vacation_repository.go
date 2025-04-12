@@ -4,7 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings" // Убедимся, что strings импортирован
+	"log" // Убедимся, что log импортирован
+	"strings"
 
 	"vacation-scheduler/internal/models"
 )
@@ -71,28 +72,42 @@ func (r *VacationRepository) CreateOrUpdateVacationLimit(userID int, year int, t
 	return nil
 }
 
-// UpdateVacationLimitUsedDays обновляет количество использованных дней отпуска для пользователя
+// UpdateVacationLimitUsedDays атомарно обновляет использованные дни, создавая лимит при необходимости.
+// daysDelta может быть положительным (списание) или отрицательным (возврат).
 func (r *VacationRepository) UpdateVacationLimitUsedDays(userID int, year int, daysDelta int) error {
+	// TODO: Вынести дефолтное значение total_days (28) в конфигурацию
+	const defaultTotalDays = 28
+	log.Printf("[Repo UpdateUsedDays] Attempting update. UserID: %d, Year: %d, Delta: %d", userID, year, daysDelta) // LOGGING
+
+	// Используем INSERT ... ON DUPLICATE KEY UPDATE для атомарного создания/обновления.
 	query := `
-		UPDATE vacation_limits 
-		SET used_days = used_days + ?, updated_at = CURRENT_TIMESTAMP 
-		WHERE user_id = ? AND year = ?`
+		INSERT INTO vacation_limits (user_id, year, total_days, used_days, created_at, updated_at) 
+		VALUES (?, ?, ?, GREATEST(0, ?), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) -- Параметры 1-4 для INSERT
+		ON DUPLICATE KEY UPDATE 
+			used_days = GREATEST(0, used_days + ?), -- Используем ПЯТЫЙ параметр (?) для UPDATE
+			updated_at = CURRENT_TIMESTAMP`
+	// total_days не трогаем при обновлении used_days
 
-	result, err := r.db.Exec(query, daysDelta, userID, year)
+	// Передаем daysDelta ДВАЖДЫ: 4-й параметр для INSERT, 5-й параметр для UPDATE
+	_, err := r.db.Exec(query, userID, year, defaultTotalDays, daysDelta, daysDelta)
 	if err != nil {
-		return fmt.Errorf("ошибка обновления использованных дней лимита: %w", err)
+		log.Printf("[Repo UpdateUsedDays] DB Exec Error. UserID: %d, Year: %d, Delta: %d, Error: %v", userID, year, daysDelta, err) // LOGGING
+		return fmt.Errorf("ошибка атомарного обновления used_days (user: %d, year: %d, delta: %d): %w", userID, year, daysDelta, err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("ошибка получения количества обновленных строк при изменении лимита: %w", err)
+	log.Printf("[Repo UpdateUsedDays] DB Exec Success. UserID: %d, Year: %d, Delta: %d", userID, year, daysDelta) // LOGGING
+
+	// READ-AFTER-WRITE CHECK: Immediately query the value to see if the update took effect
+	var currentUsedDays int
+	checkQuery := "SELECT used_days FROM vacation_limits WHERE user_id = ? AND year = ?"
+	checkErr := r.db.QueryRow(checkQuery, userID, year).Scan(&currentUsedDays)
+	if checkErr != nil {
+		log.Printf("[Repo UpdateUsedDays] Read-after-write CHECK FAILED. UserID: %d, Year: %d, Error: %v", userID, year, checkErr)
+	} else {
+		log.Printf("[Repo UpdateUsedDays] Read-after-write CHECK PASSED. UserID: %d, Year: %d, CurrentUsedDaysInDB: %d", userID, year, currentUsedDays)
 	}
-	if rowsAffected == 0 {
-		// Вместо ошибки, можно просто ничего не делать, если лимита нет
-		// Или создать лимит по умолчанию? Пока возвращаем ошибку, но можно изменить логику.
-		return fmt.Errorf("лимит отпуска для пользователя %d на год %d не найден для обновления", userID, year)
-	}
-	return nil
+
+	return nil // Успешно
 }
 
 // --- Заявки ---
@@ -103,30 +118,48 @@ func (r *VacationRepository) SaveVacationRequest(request *models.VacationRequest
 	if err != nil {
 		return fmt.Errorf("ошибка начала транзакции: %w", err)
 	}
+	// Используем именованную возвращаемую переменную для ошибки, чтобы defer мог её изменить
+	var txErr error
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
-			panic(p)
-		} else if err != nil {
-			tx.Rollback()
+			// Rollback в случае паники
+			_ = tx.Rollback() // Игнорируем ошибку отката при панике
+			panic(p)          // Повторно вызываем панику
+		} else if txErr != nil {
+			// Rollback в случае ошибки выполнения
+			log.Printf("Rolling back transaction due to error: %v", txErr)
+			if rbErr := tx.Rollback(); rbErr != nil {
+				log.Printf("Error during transaction rollback: %v", rbErr)
+				// Возвращаем исходную ошибку txErr, так как она важнее
+			}
 		} else {
-			err = tx.Commit()
-			if err != nil {
-				fmt.Printf("Ошибка коммита транзакции сохранения заявки: %v\n", err)
+			// Commit, если ошибок не было
+			txErr = tx.Commit()
+			if txErr != nil {
+				log.Printf("Ошибка коммита транзакции сохранения заявки: %v", txErr)
 			}
 		}
 	}()
 
-	queryReq := `
-		INSERT INTO vacation_requests (user_id, year, status_id, comment, created_at, updated_at) 
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-	result, err := tx.Exec(queryReq, request.UserID, request.Year, request.StatusID, request.Comment)
-	if err != nil {
-		return fmt.Errorf("ошибка сохранения заявки: %w", err)
+	// Рассчитываем days_requested перед сохранением заявки, если еще не установлено
+	if request.DaysRequested == 0 {
+		for _, p := range request.Periods {
+			request.DaysRequested += p.DaysCount
+		}
 	}
-	requestID, err := result.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("ошибка получения ID сохраненной заявки: %w", err)
+
+	queryReq := `
+		INSERT INTO vacation_requests (user_id, year, status_id, days_requested, comment, created_at, updated_at) 
+		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+	result, errExec := tx.Exec(queryReq, request.UserID, request.Year, request.StatusID, request.DaysRequested, request.Comment)
+	if errExec != nil {
+		txErr = fmt.Errorf("ошибка сохранения заявки: %w", errExec)
+		return txErr
+	}
+	requestID, errID := result.LastInsertId()
+	if errID != nil {
+		txErr = fmt.Errorf("ошибка получения ID сохраненной заявки: %w", errID)
+		return txErr
 	}
 	request.ID = int(requestID)
 
@@ -134,24 +167,28 @@ func (r *VacationRepository) SaveVacationRequest(request *models.VacationRequest
 		queryPeriod := `
 			INSERT INTO vacation_periods (request_id, start_date, end_date, days_count, created_at, updated_at) 
 			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-		stmt, err := tx.Prepare(queryPeriod)
-		if err != nil {
-			return fmt.Errorf("ошибка подготовки запроса для периодов: %w", err)
+		stmt, errPrepare := tx.Prepare(queryPeriod)
+		if errPrepare != nil {
+			txErr = fmt.Errorf("ошибка подготовки запроса для периодов: %w", errPrepare)
+			return txErr
 		}
 		defer stmt.Close()
 
 		for i := range request.Periods {
+			// Проверяем корректность дат перед выполнением запроса
 			if request.Periods[i].StartDate.IsZero() || request.Periods[i].EndDate.IsZero() || request.Periods[i].StartDate.Time.After(request.Periods[i].EndDate.Time) {
-				return fmt.Errorf("некорректные даты в периоде %d", i+1)
+				txErr = fmt.Errorf("некорректные даты в периоде %d", i+1)
+				return txErr
 			}
-			_, err := stmt.Exec(request.ID, request.Periods[i].StartDate, request.Periods[i].EndDate, request.Periods[i].DaysCount)
-			if err != nil {
-				return fmt.Errorf("ошибка сохранения периода %d: %w", i+1, err)
+			_, errStmtExec := stmt.Exec(request.ID, request.Periods[i].StartDate, request.Periods[i].EndDate, request.Periods[i].DaysCount)
+			if errStmtExec != nil {
+				txErr = fmt.Errorf("ошибка сохранения периода %d: %w", i+1, errStmtExec)
+				return txErr
 			}
 		}
 	}
 
-	return err
+	return txErr // Возвращаем nil или ошибку коммита из defer
 }
 
 // UpdateVacationRequest обновляет существующую заявку (комментарий) пользователем
@@ -201,7 +238,7 @@ func (r *VacationRepository) UpdateRequestStatusByID(requestID int, newStatusID 
 // GetVacationRequestByID получает одну заявку по ее ID вместе с периодами
 func (r *VacationRepository) GetVacationRequestByID(requestID int) (*models.VacationRequest, error) {
 	queryRequest := `
-		SELECT id, user_id, year, status_id, comment, created_at, updated_at
+		SELECT id, user_id, year, status_id, days_requested, comment, created_at, updated_at
 		FROM vacation_requests 
 		WHERE id = ?`
 	row := r.db.QueryRow(queryRequest, requestID)
@@ -209,7 +246,7 @@ func (r *VacationRepository) GetVacationRequestByID(requestID int) (*models.Vaca
 	var req models.VacationRequest
 	var comment sql.NullString
 	err := row.Scan(
-		&req.ID, &req.UserID, &req.Year, &req.StatusID,
+		&req.ID, &req.UserID, &req.Year, &req.StatusID, &req.DaysRequested,
 		&comment,
 		&req.CreatedAt, &req.UpdatedAt,
 	)
@@ -225,7 +262,9 @@ func (r *VacationRepository) GetVacationRequestByID(requestID int) (*models.Vaca
 
 	req.Periods, err = r.getPeriodsByRequestID(req.ID)
 	if err != nil {
-		return &req, fmt.Errorf("ошибка получения периодов для заявки %d: %w", req.ID, err)
+		// Можно вернуть заявку с ошибкой получения периодов, или всю ошибку целиком
+		// Возвращаем всю ошибку, чтобы было понятно, что данные неполные
+		return nil, fmt.Errorf("ошибка получения периодов для заявки %d: %w", req.ID, err)
 	}
 
 	return &req, nil
@@ -251,7 +290,7 @@ func (r *VacationRepository) getPeriodsByRequestID(requestID int) ([]models.Vaca
 			&period.DaysCount, &period.CreatedAt, &period.UpdatedAt,
 		)
 		if err != nil {
-			fmt.Printf("Ошибка сканирования периода для заявки %d: %v\n", requestID, err)
+			log.Printf("Ошибка сканирования периода для заявки %d: %v\n", requestID, err)
 			continue
 		}
 		periods = append(periods, period)
@@ -262,11 +301,10 @@ func (r *VacationRepository) getPeriodsByRequestID(requestID int) ([]models.Vaca
 	return periods, nil
 }
 
-
 // GetVacationRequestsByUser получает заявки пользователя с фильтрацией по статусу
 func (r *VacationRepository) GetVacationRequestsByUser(userID int, year int, statusFilter *int) ([]models.VacationRequest, error) {
 	baseQuery := `
-		SELECT id, user_id, year, status_id, comment, created_at, updated_at
+		SELECT id, user_id, year, status_id, days_requested, comment, created_at, updated_at
 		FROM vacation_requests 
 		WHERE user_id = ? AND year = ?`
 	args := []interface{}{userID, year}
@@ -290,18 +328,18 @@ func (r *VacationRepository) GetVacationRequestsByUser(userID int, year int, sta
 		var req models.VacationRequest
 		var comment sql.NullString
 		err := rowsReq.Scan(
-			&req.ID, &req.UserID, &req.Year, &req.StatusID,
+			&req.ID, &req.UserID, &req.Year, &req.StatusID, &req.DaysRequested,
 			&comment,
 			&req.CreatedAt, &req.UpdatedAt,
 		)
 		if err != nil {
-			fmt.Printf("Ошибка сканирования заявки пользователя %d: %v\n", userID, err)
+			log.Printf("Ошибка сканирования заявки пользователя %d: %v\n", userID, err)
 			continue
 		}
 		if comment.Valid {
 			req.Comment = comment.String
 		}
-		req.Periods = []models.VacationPeriod{}
+		req.Periods = []models.VacationPeriod{} // Initialize Periods slice
 		requestsMap[req.ID] = &req
 		requestIDs = append(requestIDs, req.ID)
 	}
@@ -331,11 +369,10 @@ func (r *VacationRepository) GetVacationRequestsByUser(userID int, year int, sta
 	return result, nil
 }
 
-
 // GetVacationRequestsByDepartment получает заявки подразделения с фильтрацией по статусу
 func (r *VacationRepository) GetVacationRequestsByDepartment(departmentID int, year int, statusFilter *int) ([]models.VacationRequest, error) {
 	baseQuery := `
-		SELECT vr.id, vr.user_id, vr.year, vr.status_id, vr.comment, vr.created_at, vr.updated_at
+		SELECT vr.id, vr.user_id, vr.year, vr.status_id, vr.days_requested, vr.comment, vr.created_at, vr.updated_at
 		FROM vacation_requests vr
 		JOIN users u ON vr.user_id = u.id
 		WHERE u.department_id = ? AND vr.year = ?`
@@ -360,18 +397,18 @@ func (r *VacationRepository) GetVacationRequestsByDepartment(departmentID int, y
 		var req models.VacationRequest
 		var comment sql.NullString
 		err := rowsReq.Scan(
-			&req.ID, &req.UserID, &req.Year, &req.StatusID,
+			&req.ID, &req.UserID, &req.Year, &req.StatusID, &req.DaysRequested,
 			&comment,
 			&req.CreatedAt, &req.UpdatedAt,
 		)
 		if err != nil {
-			fmt.Printf("Ошибка сканирования заявки отдела %d: %v\n", departmentID, err)
+			log.Printf("Ошибка сканирования заявки отдела %d: %v\n", departmentID, err)
 			continue
 		}
 		if comment.Valid {
 			req.Comment = comment.String
 		}
-		req.Periods = []models.VacationPeriod{}
+		req.Periods = []models.VacationPeriod{} // Initialize Periods slice
 		requestsMap[req.ID] = &req
 		requestIDs = append(requestIDs, req.ID)
 	}
@@ -401,13 +438,11 @@ func (r *VacationRepository) GetVacationRequestsByDepartment(departmentID int, y
 	return result, nil
 }
 
-
 // GetAllVacationRequests получает все заявки для админов/менеджеров с фильтрами
 func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilter *int, userIDFilter *int, departmentIDFilter *int) ([]models.VacationRequestAdminView, error) {
-	// Убрали JOIN к vacation_statuses
 	queryBase := `
 		SELECT 
-			vr.id, vr.user_id, vr.year, vr.status_id, vr.comment, vr.created_at, vr.updated_at,
+			vr.id, vr.user_id, vr.year, vr.status_id, vr.days_requested, vr.comment, vr.created_at, vr.updated_at,
 			u.full_name
 		FROM vacation_requests vr
 		JOIN users u ON vr.user_id = u.id`
@@ -440,11 +475,6 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 
 	rowsReq, err := r.db.Query(query, args...)
 	if err != nil {
-		// Проверяем ошибку на отсутствие таблицы `vacation_statuses` явно
-		// (Хотя мы убрали JOIN, оставим проверку на всякий случай, если проблема глубже)
-		if strings.Contains(err.Error(), "vacation_statuses") {
-			return nil, fmt.Errorf("ошибка структуры базы данных: таблица статусов недоступна. %w", err)
-		}
 		return nil, fmt.Errorf("ошибка запроса всех заявок: %w", err)
 	}
 	defer rowsReq.Close()
@@ -455,27 +485,25 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 	for rowsReq.Next() {
 		var req models.VacationRequestAdminView
 		var comment sql.NullString
-		// Убрали сканирование statusName
 		err := rowsReq.Scan(
-			&req.ID, &req.UserID, &req.Year, &req.StatusID,
+			&req.ID, &req.UserID, &req.Year, &req.StatusID, &req.DaysRequested,
 			&comment,
 			&req.CreatedAt, &req.UpdatedAt,
 			&req.UserFullName,
 		)
 		if err != nil {
-			fmt.Printf("Ошибка сканирования AdminView заявки: %v\n", err)
+			log.Printf("Ошибка сканирования AdminView заявки: %v\n", err)
 			continue
 		}
 		if comment.Valid {
 			req.Comment = comment.String
 		}
-		// Определяем StatusName на основе StatusID
 		if name, ok := statusIDToNameMap[req.StatusID]; ok {
 			req.StatusName = name
 		} else {
 			req.StatusName = "Неизвестно"
 		}
-		req.Periods = []models.VacationPeriod{}
+		req.Periods = []models.VacationPeriod{} // Initialize Periods slice
 		requestsMap[req.ID] = &req
 		requestIDs = append(requestIDs, req.ID)
 	}
@@ -503,6 +531,9 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 	result := make([]models.VacationRequestAdminView, 0, len(requestsMap))
 	for _, req := range requestsMap {
 		req.TotalDays = totalDaysMap[req.ID]
+		if req.DaysRequested != req.TotalDays {
+			log.Printf("Warning: DaysRequested (%d) in DB differs from calculated TotalDays (%d) for request ID %d", req.DaysRequested, req.TotalDays, req.ID)
+		}
 		result = append(result, *req)
 	}
 
@@ -517,11 +548,11 @@ func (r *VacationRepository) getPeriodsByRequestIDs(requestIDs []interface{}) ([
 	query := fmt.Sprintf(`
 		SELECT id, request_id, start_date, end_date, days_count, created_at, updated_at
 		FROM vacation_periods
-		WHERE request_id IN (?%s)`, sqlRepeatParams(len(requestIDs)-1))
+		WHERE request_id IN (?%s)`, sqlRepeatParams(len(requestIDs)-1)) // Use helper for placeholders
 
 	rows, err := r.db.Query(query, requestIDs...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ошибка запроса периодов по IDs: %w", err)
 	}
 	defer rows.Close()
 
@@ -533,17 +564,16 @@ func (r *VacationRepository) getPeriodsByRequestIDs(requestIDs []interface{}) ([
 			&period.DaysCount, &period.CreatedAt, &period.UpdatedAt,
 		)
 		if err != nil {
-			fmt.Printf("Ошибка сканирования периода (множественный запрос): %v\n", err)
-			continue
+			log.Printf("Ошибка сканирования периода (множественный запрос): %v\n", err)
+			continue // Skip this period on scan error
 		}
 		periods = append(periods, period)
 	}
 	if err = rows.Err(); err != nil {
-		return periods, err
+		return periods, fmt.Errorf("ошибка итерации по периодам: %w", err)
 	}
 	return periods, nil
 }
-
 
 // --- Уведомления ---
 
@@ -559,7 +589,6 @@ func (r *VacationRepository) CreateNotification(notification *models.Notificatio
 	}
 	return nil
 }
-
 
 // --- Вспомогательные функции ---
 

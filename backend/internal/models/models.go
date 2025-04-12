@@ -129,14 +129,15 @@ type Department struct {
 
 // VacationRequest - модель заявки на отпуск
 type VacationRequest struct {
-	ID        int              `json:"id" db:"id"`
-	UserID    int              `json:"user_id" db:"user_id"`
-	Year      int              `json:"year" db:"year"`
-	StatusID  int              `json:"status_id" db:"status_id"`
-	Comment   string           `json:"comment" db:"comment"`
-	CreatedAt time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at" db:"updated_at"`
-	Periods   []VacationPeriod `json:"periods"`
+	ID            int              `json:"id" db:"id"`
+	UserID        int              `json:"user_id" db:"user_id"`
+	Year          int              `json:"year" db:"year"`
+	StatusID      int              `json:"status_id" db:"status_id"`
+	DaysRequested int              `json:"days_requested" db:"days_requested"` // Добавлено поле
+	Comment       string           `json:"comment" db:"comment"`
+	CreatedAt     time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at" db:"updated_at"`
+	Periods       []VacationPeriod `json:"periods"`
 }
 
 // VacationPeriod - модель периода отпуска
@@ -200,15 +201,16 @@ type UserWithLimitDTO struct {
 // --- New DTO for Admin/Manager View ---
 // VacationRequestAdminView includes user and status details for admin/manager displays.
 type VacationRequestAdminView struct {
-	ID           int              `json:"id" db:"id"`
-	UserID       int              `json:"user_id" db:"user_id"`
-	UserFullName string           `json:"user_full_name" db:"full_name"` // Added user's full name
-	Year         int              `json:"year" db:"year"`
-	StatusID     int              `json:"status_id" db:"status_id"`
-	StatusName   string           `json:"status_name" db:"status_name"` // Added status name
-	Comment      string           `json:"comment" db:"comment"`
-	CreatedAt    time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time        `json:"updated_at" db:"updated_at"`
-	Periods      []VacationPeriod `json:"periods"`    // Populated separately
-	TotalDays    int              `json:"total_days"` // Calculated total days across periods
+	ID            int              `json:"id" db:"id"`
+	UserID        int              `json:"user_id" db:"user_id"`
+	UserFullName  string           `json:"user_full_name" db:"full_name"` // Added user's full name
+	Year          int              `json:"year" db:"year"`
+	StatusID      int              `json:"status_id" db:"status_id"`
+	StatusName    string           `json:"status_name" db:"status_name"`       // Added status name
+	DaysRequested int              `json:"days_requested" db:"days_requested"` // Добавлено поле (уже было в схеме, добавляем сюда для согласованности)
+	Comment       string           `json:"comment" db:"comment"`
+	CreatedAt     time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at" db:"updated_at"`
+	Periods       []VacationPeriod `json:"periods"`    // Populated separately
+	TotalDays     int              `json:"total_days"` // Calculated total days across periods (остается для отображения, но не используется для логики списания)
 }

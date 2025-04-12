@@ -124,8 +124,8 @@ const Sidebar = () => {
             </li>
           )}
           
-          {/* Пункты меню для администратора (временно без анимации для отладки) */}
-          {user?.isAdmin && (
+          {/* Пункты меню для администратора */}
+          {user?.isAdmin && ( // ВОЗВРАЩЕНО: Проверяем user.isAdmin
             <li className="role-section admin-section">
                <NavLink to="/admin/dashboard" className={({isActive}) => isActive ? 'active' : ''}>
                 <FaUserShield /> {/* Иконка админа */}

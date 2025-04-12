@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react'; // Добавлен Suspense и lazy
+import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react'; // Добавлен useCallback
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import { AnimatePresence } from 'framer-motion';
@@ -21,6 +21,7 @@ import Loader from './components/ui/Loader/Loader';
 
 // Сервисы (перемещены выше)
 import { isAuthenticated, getCurrentUser, logout } from './api/auth';
+import { getVacationLimit } from './api/vacations'; // Импортируем API для получения лимита
 
 // Auth pages (lazy loading)
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
@@ -42,56 +43,113 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true); // Состояние загрузки данных пользователя
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      console.log("App useEffect running..."); // Лог 1: Проверяем запуск useEffect
-      if (isAuthenticated()) {
-        console.log("User is authenticated (token found)."); // Лог 2: Проверяем аутентификацию
-        try {
-          const storedUser = localStorage.getItem('user');
-          console.log("Stored user data from localStorage:", storedUser); // Лог 3: Смотрим, что в localStorage
-          if (storedUser) {
-             setUser(JSON.parse(storedUser));
-          } else {
-             // Если пользователя нет в localStorage, но есть токен, разлогиниваем
-             // Если пользователя нет в localStorage, но есть токен, разлогиниваем
-             console.log("Token exists, but no user data in localStorage. Logging out.");
-             logout();
-             // Важно выйти из try/catch или функции после logout, чтобы не пытаться парсить null
-             setLoading(false); // Завершаем загрузку в этом случае тоже
-             return; 
-          }
-          
-          // Пытаемся парсить только если storedUser не null
-          const userData = JSON.parse(storedUser); 
-          setUser(userData); // Устанавливаем состояние
-          console.log("User data set in App state:", userData); // Лог 4: Выводим данные пользователя ПОСЛЕ setUser
-          
-          // --- Закомментированный блок для реального API ---
-          // const realUserData = await getCurrentUser(); 
-          // console.log("User data from API:", realUserData); 
-          // if (realUserData) {
-          //    setUser(realUserData);
-          // } else {
-          //    logout(); // Разлогиниваем, если API не вернуло пользователя
-          // }
-          // --- Конец закомментированного блока ---
+  // Функция для обновления лимитов отпуска пользователя
+  const refreshUserVacationLimits = useCallback(async () => {
+    // Проверяем наличие токена, а не объекта user, который может быть старым
+    if (!isAuthenticated()) {
+        console.log("Not authenticated, skipping limits refresh.");
+        return;
+    }
 
-         } catch (error) {
-          console.error('Error fetching/parsing user data:', error); // Лог 5: Ловим ошибки в try
-          // Если произошла ошибка (например, токен невалиден или JSON некорректен), разлогиниваем
-          logout();
+    const currentYear = new Date().getFullYear();
+    console.log(`Refreshing vacation limits for year ${currentYear}`);
+    try {
+      // API getVacationLimit использует токен для идентификации пользователя
+      const limits = await getVacationLimit(currentYear); // API returns { total_days, used_days, ... }
+
+      // ИСПРАВЛЕНО: Используем правильные имена полей из API
+      const total_days = limits.total_days ?? 0;
+      const used_days = limits.used_days ?? 0;
+      const availableDays = total_days - used_days; // Correct calculation
+
+      // Логирование с правильными именами
+      console.log(`Fetched limits: total_days=${total_days}, used_days=${used_days}, Available=${availableDays}`);
+
+      // Используем функциональную форму setUser, чтобы не зависеть от 'user'
+      setUser(prevUser => {
+        // Если по какой-то причине предыдущего пользователя нет, но мы аутентифицированы,
+        // возможно, стоит вернуть null или базовый объект, но пока просто проверим.
+        if (!prevUser) {
+            console.log("setUser in refresh: prevUser is null, returning null.");
+            return null;
         }
-      } else {
-          console.log("User is not authenticated (no token found)."); // Лог 6: Если токена нет
+        const updatedUser = {
+          ...prevUser,
+          vacationLimits: { // Добавляем или обновляем объект с лимитами
+            ...(prevUser.vacationLimits || {}), // Сохраняем другие года, если они есть
+            [currentYear]: {
+              // ИСПРАВЛЕНО: Сохраняем с правильными именами, но можно и с camelCase, если консистентно
+              totalDays: total_days, // Сохраним как camelCase в стейте для удобства
+              usedDays: used_days,   // Сохраним как camelCase в стейте для удобства
+              availableDays: availableDays,
+            }
+          },
+          // Обновляем поля верхнего уровня (camelCase)
+          currentAvailableDays: availableDays,
+          currentTotalDays: total_days,
+          currentUsedDays: used_days,
+        };
+        console.log("Updating user state with new limits:", updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        return updatedUser;
+      });
+    } catch (error) {
+      console.error("Failed to refresh vacation limits:", error);
+      // Возможно, стоит разлогинить пользователя, если запрос лимитов критичен или вернул 401/403
+      if (error.response?.status === 401 || error.response?.status === 403) {
+          logout();
+          setUser(null); // Сбрасываем пользователя в стейте
       }
-      setLoading(false); // Завершаем загрузку
-      console.log("App useEffect finished."); // Лог 7: Проверяем завершение useEffect
+    }
+  }, []); // <-- УБРАЛИ 'user' из зависимостей
+
+  // Основной useEffect для загрузки пользователя
+   useEffect(() => {
+    let isMounted = true; // Флаг для предотвращения обновления состояния в размонтированном компоненте
+    const fetchUser = async () => {
+        if (!isMounted) return; // Прерываем, если компонент размонтирован
+        setLoading(true);
+        if (isAuthenticated()) {
+            const storedUserString = localStorage.getItem('user');
+            if (storedUserString) {
+                try {
+                    const storedUser = JSON.parse(storedUserString);
+                    if (isMounted) {
+                        setUser(storedUser);
+                        // Вызываем обновление лимитов ПОСЛЕ установки пользователя.
+                        // refreshUserVacationLimits теперь стабильна (нет зависимостей).
+                        await refreshUserVacationLimits(); // Убрали setTimeout, вызываем напрямую
+                    }
+                } catch (parseError) {
+                    console.error("Error parsing user from localStorage:", parseError);
+                    logout(); // Разлогиниваем при ошибке парсинга
+                    if (isMounted) setUser(null);
+                }
+            } else if (localStorage.getItem('token')) {
+                 // Есть токен, но нет пользователя в localStorage - некорректное состояние
+                 console.log("Token exists, but no user data in localStorage. Logging out.");
+                 logout();
+                 if (isMounted) setUser(null);
+            } else {
+                 // Нет токена и нет пользователя в localStorage (не залогинен)
+                 if (isMounted) setUser(null);
+            }
+        } else {
+             // Не аутентифицирован (нет токена)
+             if (isMounted) setUser(null);
+        }
+        if (isMounted) {
+             setLoading(false);
+        }
     };
 
     fetchUser();
-  }, []); // Пустой массив зависимостей, чтобы выполнилось один раз при монтировании
 
+    return () => {
+      isMounted = false; // Устанавливаем флаг при размонтировании
+    };
+    // Зависимость от refreshUserVacationLimits остается, но функция теперь стабильна
+  }, [refreshUserVacationLimits]);
   // Отображение глобального загрузчика во время проверки аутентификации
   if (loading) {
     return <Loader />; // Отображаем лоадер на весь экран
@@ -99,8 +157,8 @@ const App = () => {
 
   return (
     <ThemeProvider>
-      {/* Передаем user и setUser в провайдер */}
-      <UserProvider value={{ user, setUser }}>
+      {/* Передаем user, setUser и refreshUserVacationLimits */}
+      <UserProvider value={{ user, setUser, refreshUserVacationLimits }}>
         <Router>
           <div className="app">
             <ToastContainer
@@ -171,8 +229,8 @@ const App = () => {
                         {/* Маршруты для администраторов (дополнительная проверка роли) */}
                         <Route
                           path="/admin/dashboard"
-                          element={ // Проверяем роль админа
-                            user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/profile" replace />
+                          element={ // ИЗМЕНЕНО: Проверяем isAdmin вместо role
+                            user?.isAdmin ? <AdminDashboard /> : <Navigate to="/profile" replace /> 
                           }
                         />
                       </Route>

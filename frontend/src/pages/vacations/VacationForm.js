@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react'; // Убран useCallback и flushSync
+import React, { useState, useEffect, useContext } from 'react'; // Добавили useContext
 import { motion, AnimatePresence } from 'framer-motion';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { toast } from 'react-toastify';
 import { FaCalendarAlt, FaPlus, FaTrash, FaSave, FaPaperPlane } from 'react-icons/fa';
 import ru from 'date-fns/locale/ru';
-import { getVacationLimit, createVacationRequest, submitVacationRequest } from '../../api/vacations'; // Предполагается, что API файл будет создан
+import { UserContext } from '../../context/UserContext'; // Импортируем UserContext
+// Убираем getVacationLimit из импортов API, т.к. он больше не нужен здесь
+import { createVacationRequest, submitVacationRequest } from '../../api/vacations';
 import 'react-datepicker/dist/react-datepicker.css';
 import './VacationForm.css';
 
@@ -12,46 +14,31 @@ import './VacationForm.css';
 registerLocale('ru', ru);
 
 const VacationForm = () => {
+  const { user } = useContext(UserContext); // Получаем пользователя из контекста
   const [year, setYear] = useState(new Date().getFullYear() + 1);
   const [periods, setPeriods] = useState([{ startDate: null, endDate: null, daysCount: 0 }]);
-  const [status, setStatus] = useState('draft'); // 'draft', 'submitted'
-  const [limit, setLimit] = useState(28);
-  const [usedDays, setUsedDays] = useState(0);
-  const [loading, setLoading] = useState(false); // Для загрузки лимита
-  const [submitting, setSubmitting] = useState(false); // Для сохранения/отправки
+  const [status, setStatus] = useState('draft');
+  // Убираем локальные состояния limit и usedDays
+  // const [limit, setLimit] = useState(28);
+  // const [usedDays, setUsedDays] = useState(0);
+  // const [loading, setLoading] = useState(false); // Больше не загружаем лимит здесь
+  const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [requestId, setRequestId] = useState(null); // ID сохраненной заявки
+  const [requestId, setRequestId] = useState(null);
 
+  // Получаем актуальные лимиты из контекста пользователя
+  // Используем значения для ТЕКУЩЕГО ВЫБРАННОГО года (year), если они есть в контексте
+  // Если нет, используем дефолтные значения
+  const limitsForSelectedYear = user?.vacationLimits?.[year];
+  const currentLimit = limitsForSelectedYear?.totalDays ?? 28; // Дефолт 28, если нет данных
+  const currentUsedDays = limitsForSelectedYear?.usedDays ?? 0; // Дефолт 0
 
-  // Загрузка лимита отпуска при изменении года
-  useEffect(() => {
-    const fetchLimit = async () => {
-      try {
-        setLoading(true);
-        const limitData = await getVacationLimit(year); // Используем реальный API вызов
-        setLimit(limitData.total_days);
-        setUsedDays(limitData.used_days);
-      } catch (error) {
-        // Обработка ошибки, если лимит не найден (например, для нового пользователя/года)
-        if (error.message.includes("лимит отпуска не найден")) {
-            toast.info(`Лимит на ${year} год еще не установлен. Используется стандартный лимит (${limit} дней).`);
-            // Оставляем дефолтные значения limit и usedDays
-        } else {
-            toast.error("Ошибка при загрузке лимита отпуска"); // Показываем общую ошибку, если это не ошибка "лимит не найден"
-        }
-        // toast.error("Ошибка при загрузке лимита отпуска"); // Убираем дублирующийся вызов
-        console.error("Ошибка при загрузке лимита:", error); // Логируем ошибку для отладки
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchLimit();
-  }, [year]);
+  // Убираем useEffect для загрузки лимита
+  // useEffect(() => { ... fetchLimit ... }, [year]);
 
-  // Вычисление общего количества дней
+  // Вычисление общего количества дней (используем currentLimit и currentUsedDays из контекста)
   const totalDaysRequested = periods.reduce((sum, period) => sum + period.daysCount, 0);
-  const remainingDays = limit - usedDays - totalDaysRequested;
+  const remainingDays = currentLimit - currentUsedDays - totalDaysRequested; // Используем актуальные данные
 
   // Функция для подсчета дней между датами
   const calculateDays = (startDate, endDate) => {
@@ -105,7 +92,7 @@ const VacationForm = () => {
   // Убран useCallback
   const validateForm = (periodsToValidate = periods) => { // Снова принимаем аргумент или используем состояние
     // Всегда начинаем с пустого объекта ошибок
-    const currentErrors = {}; 
+    const currentErrors = {};
     // const periodsToValidate = periods; // Используем переданный аргумент или состояние
 
     // 1. Проверка базовой корректности дат и наличия периодов
@@ -125,27 +112,17 @@ const VacationForm = () => {
     }
 
     // 2. Проверка общих дней и правила 14 дней (только если базовые даты корректны)
-    if (!hasInvalidDates) {
-      const totalRequested = periodsToValidate.reduce((sum, period) => sum + period.daysCount, 0);
-      
-      if (totalRequested <= 0) {
-           currentErrors.noDays = 'Необходимо запросить хотя бы один день отпуска (проверьте даты).';
-      } else { // totalRequested > 0
-          // Отладка: выводим периоды и рассчитанные дни
-          console.log('Validating 14-day rule. Periods:', JSON.stringify(periodsToValidate.map(p => ({ start: p.startDate, end: p.endDate, days: p.daysCount }))));
-          
-          // Проверяем правило 14 дней
-          const hasLongPeriod = periodsToValidate.some(period => period.daysCount >= 14);
-          console.log('Has long period (>= 14 days):', hasLongPeriod); // Отладка
-          // Добавляем ошибку только если условие НЕ выполнено
-          if (!hasLongPeriod) { 
-              currentErrors.longPeriod = 'Одна из частей отпуска должна быть не менее 14 календарных дней.';
-          }
-          // Проверяем лимит
-          if (totalRequested > (limit - usedDays)) {
-              currentErrors.limit = `Превышен доступный лимит дней отпуска (${limit - usedDays} дн.).`;
-          }
-      }
+    if (!errors.invalidDates && !errors.noDays && !errors.noPeriods) { // Проверяем только если базовые вещи ОК
+        const totalRequested = periodsToValidate.reduce((sum, period) => sum + period.daysCount, 0);
+        const hasLongPeriod = periodsToValidate.some(period => period.daysCount >= 14);
+
+        if (!hasLongPeriod && totalRequested > 0) { // Добавляем проверку totalRequested > 0
+            currentErrors.longPeriod = 'Одна из частей отпуска должна быть не менее 14 календарных дней.';
+        }
+        // Используем currentLimit и currentUsedDays из контекста для проверки лимита
+        if (totalRequested > (currentLimit - currentUsedDays)) {
+            currentErrors.limit = `Превышен доступный лимит дней отпуска (${currentLimit - currentUsedDays} дн.).`;
+        }
     }
     
     // Log the errors object *before* setting state
@@ -205,6 +182,9 @@ const VacationForm = () => {
       setRequestId(currentRequestId); // Обновляем состояние ID
       toast.info('Черновик сохранен/обновлен.'); // Информируем пользователя
 
+      // ADD DELAY before submitting
+      await new Promise(resolve => setTimeout(resolve, 200)); // Add 200ms delay
+
       // 2. Отправляем заявку с полученным ID
       await submitVacationRequest(currentRequestId);
       toast.success('Заявка успешно отправлена руководителю');
@@ -231,12 +211,12 @@ const VacationForm = () => {
       <h2>Оформление отпуска на {year} год</h2>
       
       <div className="year-selector">
-        <label htmlFor="year">Выберите год:</label>
-        <select id="year" value={year} onChange={handleYearChange} disabled={loading || submitting}>
+        {/* Убираем disabled={loading} */}
+        <select id="year" value={year} onChange={handleYearChange} disabled={submitting}>
           <option value={new Date().getFullYear()}>Текущий год</option>
           <option value={new Date().getFullYear() + 1}>Следующий год</option>
         </select>
-        {loading && <span className="loading-indicator"> Загрузка лимита...</span>}
+        {/* Убираем индикатор загрузки лимита */}
       </div>
       
       <motion.div 
@@ -247,11 +227,13 @@ const VacationForm = () => {
       >
         <div className="limit-item">
           <span>Доступно дней:</span>
-          <span className="limit-value">{limit}</span>
+          {/* Используем currentLimit */}
+          <span className="limit-value">{currentLimit}</span>
         </div>
         <div className="limit-item">
           <span>Использовано:</span>
-          <span className="limit-value">{usedDays}</span>
+           {/* Используем currentUsedDays */}
+          <span className="limit-value">{currentUsedDays}</span>
         </div>
         <div className="limit-item">
           <span>Запрошено:</span>
@@ -259,6 +241,7 @@ const VacationForm = () => {
         </div>
         <div className="limit-item">
           <span>Осталось:</span>
+           {/* remainingDays теперь рассчитывается на основе данных контекста */}
           <span className={`limit-value ${remainingDays < 0 ? 'error' : ''}`}>
             {remainingDays}
           </span>

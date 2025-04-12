@@ -10,7 +10,7 @@ import {
   rejectVacationRequest
 } from '../../api/vacations';
 import Loader from '../../components/ui/Loader/Loader';
-import { UserContext } from '../../context/UserContext';
+import { UserContext } from '../../context/UserContext'; // Импортируем UserContext
 // import './VacationsList.css'; // Раскомментируйте, если есть стили
 
 // Константы статусов
@@ -56,7 +56,8 @@ const StatusBadge = ({ statusId, statusNameFromData }) => {
 };
 
 const VacationsList = () => {
-  const { user } = useContext(UserContext);
+  // Получаем user и refreshUserVacationLimits из контекста
+  const { user, refreshUserVacationLimits } = useContext(UserContext);
   const [vacations, setVacations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -143,13 +144,19 @@ const VacationsList = () => {
       try {
           await actionFunc(id);
           toast.success(successMsg);
-          fetchVacations(year, statusFilter); // Обновляем список
+          // Обновляем список заявок И лимиты пользователя
+          await fetchVacations(year, statusFilter);
+          if (refreshUserVacationLimits) { // Вызываем обновление лимитов, если функция доступна
+             await refreshUserVacationLimits();
+          }
       } catch (err) {
           const errMsg = err.response?.data?.error || err.message || `Не удалось выполнить действие.`;
           toast.error(`${errorMsgPrefix}: ${errMsg}`);
-          setLoading(false); // Разблокируем в случае ошибки
+          // setLoading(false) не нужен здесь, так как fetchVacations/refreshUserVacationLimits его сбросят
+      } finally {
+          // Убедимся, что loading сбрасывается, даже если refreshUserVacationLimits нет или он упал
+           setLoading(false);
       }
-      // setLoading(false) сработает в finally fetchVacations
   };
 
   const handleCancel = (id) => {
@@ -158,28 +165,36 @@ const VacationsList = () => {
       }
   };
 
+  // Обработчик утверждения (вызывает handleAction)
   const handleApprove = (id) => {
-      if (window.confirm('Вы уверены, что хотите утвердить эту заявку?')) {
-          handleAction(approveVacationRequest, id, 'Заявка успешно утверждена', 'Ошибка утверждения');
-      }
+    if (window.confirm('Вы уверены, что хотите утвердить эту заявку?')) {
+        // Передаем approveVacationRequest в handleAction
+        handleAction(approveVacationRequest, id, 'Заявка успешно утверждена', 'Ошибка утверждения');
+    }
   };
 
+  // Обработчик отклонения (немного изменен для использования refreshUserVacationLimits)
   const handleReject = async (id) => {
-      const reason = prompt('Укажите причину отклонения (необязательно):');
-      if (reason !== null) {
-          if (window.confirm(`Вы уверены, что хотите отклонить эту заявку? ${reason ? `Причина: ${reason}` : ''}`)) {
-              setLoading(true);
-              try {
-                  await rejectVacationRequest(id, reason || '');
-                  toast.success('Заявка успешно отклонена');
-                  fetchVacations(year, statusFilter); // Обновляем список
-              } catch (err) {
-                  const errMsg = err.response?.data?.error || err.message || `Не удалось отклонить заявку.`;
-                  toast.error(`Ошибка отклонения: ${errMsg}`);
-                  setLoading(false);
-              }
-          }
-      }
+    const reason = prompt('Укажите причину отклонения (необязательно):');
+    if (reason !== null) { // Убедимся, что пользователь не нажал "Отмена" в prompt
+        if (window.confirm(`Вы уверены, что хотите отклонить эту заявку? ${reason ? `Причина: ${reason}` : ''}`)) {
+            setLoading(true);
+            try {
+                await rejectVacationRequest(id, reason || '');
+                toast.success('Заявка успешно отклонена');
+                // Обновляем список заявок И лимиты пользователя
+                await fetchVacations(year, statusFilter);
+                if (refreshUserVacationLimits) {
+                    await refreshUserVacationLimits();
+                }
+            } catch (err) {
+                const errMsg = err.response?.data?.error || err.message || `Не удалось отклонить заявку.`;
+                toast.error(`Ошибка отклонения: ${errMsg}`);
+            } finally {
+                 setLoading(false); // Сбрасываем loading в finally
+            }
+        }
+    }
   };
 
   // Проверка прав на управление (используем camelCase userId)
