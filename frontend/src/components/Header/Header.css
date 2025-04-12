@@ -257,11 +257,28 @@
 @media (max-width: 768px) {
   .mobile-menu-button {
     display: block; /* Показываем кнопку на мобильных */
-    margin-left: 15px; /* Отступ слева */
+    /* margin-left: 15px; /* Отступ слева больше не нужен */
+    order: 3; /* Ставим кнопку меню последней справа */
   }
 
   .header-right {
-    display: none; /* Скрываем правую часть по умолчанию */
+      gap: 10px; /* Уменьшаем отступ между иконками справа */
+  }
+
+  /* Не скрываем весь блок .header-right, чтобы ThemeToggle остался */
+  /* .header-right { */
+  /*   display: none; /* Скрываем правую часть по умолчанию */
+  /* } */
+
+  /* Скрываем только дропдаун профиля на мобильных */
+  .header-right .profile-dropdown {
+    display: none;
+  }
+  /* Иконка уведомлений (.notifications-dropdown) и ThemeToggle остаются видимыми */
+
+  /* Если нужно, можно скорректировать отступы для ThemeToggle */
+  .header-right > *:not(:last-child) { /* Отступ между ThemeToggle и кнопкой меню, если она справа */
+      /* margin-right: 10px; */ /* Пример */
   }
   
   .header-right.hidden-on-mobile {
@@ -272,8 +289,7 @@
      /* Если нужно показать правую часть при открытом меню (нетипично) */
      /* display: flex; */
   }
-  
-  .logo {
-      margin-right: auto; /* Логотип занимает доступное место слева */
-  }
+  /* .logo { */
+  /*     margin-right: auto; /* Логотип занимает доступное место слева - больше не нужно */
+  /* } */
 }

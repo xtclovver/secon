@@ -294,7 +294,13 @@
 /* --- Адаптивность --- */
 @media (max-width: 768px) {
   .department-management-page {
-      padding: 15px;
+      padding: 20px 15px; /* Уменьшаем вертикальные отступы */
+      margin: 20px auto; /* Уменьшаем внешние отступы */
+      max-width: 95%; /* Позволяем занимать больше ширины экрана */
+  }
+
+  .breadcrumbs {
+      font-size: 0.95em; /* Немного уменьшим шрифт крошек */
   }
 
   .list-item--unit,
@@ -339,6 +345,10 @@
    }
 }
 @media (max-width: 480px) {
+     .department-management-page {
+         padding: 15px 10px; /* Еще уменьшаем отступы */
+         margin: 15px auto;
+     }
      .department-management-page h1 {
          font-size: 1.5em; /* Уменьшаем заголовок на совсем маленьких экранах */
      }
@@ -350,6 +360,14 @@
      }
      .item-actions button {
          padding: 8px 12px; /* Уменьшаем паддинг кнопок */
+     }
+     .year-selector {
+         flex-direction: column; /* Ставим элементы вертикально */
+         align-items: flex-start; /* Выравниваем по левому краю */
+         gap: 8px;
+     }
+     .year-selector select {
+         width: 100%; /* Селект на всю ширину */
      }
      .item-actions--limit {
         flex-direction: column; /* На совсем маленьких ставим инпут и кнопку друг под другом */

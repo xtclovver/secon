@@ -86,13 +86,9 @@ const Header = () => {
               Система учета отпусков
             </motion.span>
           </Link>
-          
-          {/* Кнопка мобильного меню */}
-          <button className="mobile-menu-button" onClick={toggleMobileMenu}>
-            {isMobileMenuOpen ? <FaTimes /> : <FaBars />}
-          </button>
+          {/* Кнопка мобильного меню перенесена в .header-right */}
         </div>
-        
+
         {/* Мобильное меню */}
         <AnimatePresence>
           {isMobileMenuOpen && (
@@ -213,6 +209,11 @@ const Header = () => {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Кнопка мобильного меню теперь здесь */}
+          <button className="mobile-menu-button" onClick={toggleMobileMenu}>
+            {isMobileMenuOpen ? <FaTimes /> : <FaBars />}
+          </button>
         </div>
       </div>
     </header>
