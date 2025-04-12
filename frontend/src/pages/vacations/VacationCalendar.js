@@ -6,8 +6,8 @@ import { FaCalendarAlt, FaUser, FaUsers } from 'react-icons/fa';
 import { getDepartmentVacations } from '../../api/vacations'; // Используем API для получения данных
 import Loader from '../../components/ui/Loader/Loader';
 import { useUser } from '../../context/UserContext'; // Для получения ID подразделения
-import 'react-calendar/dist/Calendar.css';
-// import './VacationCalendar.css'; // Можно добавить стили
+// import 'react-calendar/dist/Calendar.css'; // Убираем стандартные стили
+import './VacationCalendar.css'; // Импортируем наши стили
 
 const VacationCalendar = () => {
   const { user } = useUser(); // Получаем текущего пользователя
@@ -102,13 +102,19 @@ const VacationCalendar = () => {
        <div className="controls" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
          <label htmlFor="calendar-year">Год:</label>
          <select 
-            id="calendar-year" 
-            value={year} 
-            onChange={(e) => setYear(parseInt(e.target.value))}
+            id="calendar-year"
+            value={year}
+            onChange={(e) => {
+              const newYear = parseInt(e.target.value);
+              setYear(newYear);
+              // Устанавливаем дату календаря на 1 января выбранного года
+              setCalendarDate(new Date(newYear, 0, 1)); 
+            }}
             disabled={loading}
           >
-            {[...Array(5)].map((_, i) => {
-              const y = new Date().getFullYear() + 2 - i;
+            {[...Array(6)].map((_, i) => { // Генерируем 6 лет: текущий + 5 следующих
+              const currentYear = new Date().getFullYear();
+              const y = currentYear + i; // Начинаем с текущего года и добавляем смещение
               return <option key={y} value={y}>{y}</option>;
             })}
           </select>
@@ -131,23 +137,16 @@ const VacationCalendar = () => {
                 locale="ru-RU"
                 className="department-wide-calendar" // Класс для возможных стилей
             />
-             <div className="calendar-legend" style={{ marginTop: '15px', textAlign: 'center', fontSize: '0.9rem' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: '15px' }}>
-                    <div style={{ width: '15px', height: '15px', backgroundColor: 'rgba(13, 202, 240, 0.3)', marginRight: '5px', borderRadius: '3px' }}></div>
+             <div className="calendar-legend">
+                <span>
+                    <div className="legend-color-box"></div> {/* Используем класс для квадратика */}
                     Сотрудник в отпуске
                 </span>
              </div>
          </motion.div>
       )}
       
-       {/* Стили для маркеров и дат */}
-       <style jsx>{`
-        .calendar-marker { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 3px; font-size: 0.7rem; padding: 1px 3px; border-radius: 3px; color: white; background-color: var(--info-color); }
-        .department-vacation-date { background-color: rgba(13, 202, 240, 0.15) !important; /* Легкий фон для дней с отпусками */ }
-        .react-calendar__tile--now.department-vacation-date { background-color: rgba(13, 202, 240, 0.3) !important; /* Выделение сегодняшнего дня в отпуске */ }
-        .department-wide-calendar { width: 100%; border: none !important; }
-        .department-wide-calendar .react-calendar__tile { height: 90px; /* Увеличим высоту ячейки */ } 
-      `}</style>
+      {/* Убираем <style jsx>, так как стили теперь в CSS-файле */}
 
     </motion.div>
   );

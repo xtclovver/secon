@@ -289,14 +289,16 @@ func (r *UserRepository) UpdateUser(userID int, updateData *models.UserUpdateDTO
 
 // GetAllUsersWithLimits получает всех пользователей вместе с их лимитом отпуска на указанный год
 func (r *UserRepository) GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error) {
-	// Используем LEFT JOIN, чтобы получить всех пользователей, даже если у них нет лимита на этот год
+	// Используем LEFT JOIN, чтобы получить всех пользователей, их должности и лимиты на год
 	query := `
 		SELECT 
 			u.id, 
 			u.full_name, 
-			u.email, 
-			vl.total_days 
+			u.email,         -- Оставляем email на всякий случай, но добавим должность
+			p.name AS position_name, -- Добавляем название должности
+			vl.total_days    -- Лимит дней
 		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id -- Добавляем JOIN для получения должности
 		LEFT JOIN vacation_limits vl ON u.id = vl.user_id AND vl.year = ?
 		ORDER BY u.full_name` // Сортируем по имени для удобства отображения
 
@@ -309,20 +311,36 @@ func (r *UserRepository) GetAllUsersWithLimits(year int) ([]models.UserWithLimit
 	var usersWithLimits []models.UserWithLimitDTO
 	for rows.Next() {
 		var userDTO models.UserWithLimitDTO
-		var limitDays sql.NullInt64 // Используем NullInt64 для total_days, так как JOIN может вернуть NULL
+		var limitDays sql.NullInt64     // Для total_days
+		var positionName sql.NullString // Для position_name
 
-		if err := rows.Scan(&userDTO.ID, &userDTO.FullName, &userDTO.Email, &limitDays); err != nil {
+		// Сканируем ID, ФИО, Email, Название должности, Лимит дней
+		if err := rows.Scan(
+			&userDTO.ID,
+			&userDTO.FullName,
+			&userDTO.Email, // Сканируем email (даже если не используем во фронте сразу)
+			&positionName,  // Сканируем название должности
+			&limitDays,
+		); err != nil {
 			// log.Printf("Ошибка сканирования пользователя с лимитом: %v", err)
 			// Можно пропустить пользователя или вернуть ошибку
 			continue
 		}
 
-		// Преобразуем NullInt64 в *int
+		// Преобразуем NullInt64 (лимит дней) в *int
 		if limitDays.Valid {
 			days := int(limitDays.Int64)
 			userDTO.VacationLimitDays = &days
 		} else {
-			userDTO.VacationLimitDays = nil // Явно указываем nil, если лимита нет
+			userDTO.VacationLimitDays = nil
+		}
+
+		// Преобразуем NullString (название должности) в *string
+		if positionName.Valid {
+			name := positionName.String
+			userDTO.Position = &name // Предполагаем, что поле называется Position в DTO
+		} else {
+			userDTO.Position = nil // Явно указываем nil, если должности нет
 		}
 
 		usersWithLimits = append(usersWithLimits, userDTO)

@@ -71,7 +71,8 @@ const AdminDashboard = () => {
     try {
       // Вызываем API для установки лимита
       await setVacationLimit(userId, selectedYear, totalDays);
-      toast.success(`Лимит для пользователя ${users.find(u => u.id === userId)?.fullName || userId} на ${selectedYear} год успешно установлен.`);
+      // Исправляем обращение к полю ФИО в сообщении
+      toast.success(`Лимит для пользователя ${users.find(u => u.id === userId)?.full_name || userId} на ${selectedYear} год успешно установлен.`);
       // Обновляем состояние limits локально после успешного сохранения (не обязательно, т.к. данные перезагрузятся при смене года)
       // Но можно сделать для мгновенного отображения, если нужно
       // setLimits(prev => ({ ...prev, [userId]: String(totalDays) }));
@@ -91,7 +92,8 @@ const AdminDashboard = () => {
       transition={{ duration: 0.5 }}
     >
       <h2><FaUserShield /> Панель администратора</h2>
-      <p>Добро пожаловать, {user?.fullName || 'Администратор'}!</p>
+      {/* Исправляем обращение к полю ФИО в приветствии */}
+      <p>Добро пожаловать, {user?.full_name || 'Администратор'}!</p>
       <p>Здесь вы можете управлять пользователями, подразделениями и настройками системы.</p>
 
       {/* Раздел управления (примеры) */}
@@ -149,7 +151,7 @@ const AdminDashboard = () => {
               <thead>
                 <tr>
                   <th style={tableHeaderStyle}>Пользователь</th>
-                  <th style={tableHeaderStyle}>Email</th>
+                  <th style={tableHeaderStyle}>Должность</th>
                   <th style={tableHeaderStyle}>Лимит дней ({selectedYear})</th>
                   <th style={tableHeaderStyle}>Действие</th>
                 </tr>
@@ -157,8 +159,10 @@ const AdminDashboard = () => {
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id}>
-                    <td style={tableCellStyle}>{u.fullName}</td>
-                    <td style={tableCellStyle}>{u.email}</td>
+                    {/* Исправляем обращение к полю ФИО с fullName на full_name */}
+                    <td style={tableCellStyle}>{u.full_name || 'Имя не указано'}</td>
+                    {/* Отображаем должность вместо email. Поле называется position (из DTO) */}
+                    <td style={tableCellStyle}>{u.position || 'Не указана'}</td>
                     <td style={tableCellStyle} title={limits[u.id] === '' ? 'Лимит не установлен' : ''}>
                       <input
                         type="number"

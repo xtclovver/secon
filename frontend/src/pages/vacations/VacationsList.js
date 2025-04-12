@@ -61,6 +61,7 @@ const VacationsList = () => {
   const [vacations, setVacations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [availableYears, setAvailableYears] = useState([]); // Состояние для доступных годов
   const [statusFilter, setStatusFilter] = useState('');
   const [error, setError] = useState(null);
 
@@ -134,6 +135,21 @@ const VacationsList = () => {
   useEffect(() => {
     fetchVacations(year, statusFilter);
   }, [year, statusFilter, user]); // Зависим от user, чтобы перезагрузить при смене пользователя
+
+  // Эффект для обновления списка доступных годов
+  useEffect(() => {
+    const currentSystemYear = new Date().getFullYear();
+    const futureYears = Array.from({ length: 6 }, (_, i) => currentSystemYear + i); // Текущий + 5 следующих
+    const pastYearsFromData = [...new Set(vacations.map(v => v.year))]; // Уникальные годы из загруженных данных
+
+    // Объединяем все годы, добавляем текущий выбранный год на всякий случай,
+    // убираем дубликаты и сортируем по убыванию
+    const allYears = [...new Set([year, ...futureYears, ...pastYearsFromData])]
+                        .sort((a, b) => b - a); // Сортировка по убыванию
+
+    setAvailableYears(allYears);
+
+  }, [vacations, year]); // Пересчитываем при изменении заявок или выбранного года
 
   // Обработчики событий
   const handleYearChange = (e) => setYear(parseInt(e.target.value));
@@ -220,10 +236,10 @@ const VacationsList = () => {
         <div className="year-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <label htmlFor="vacation-year">Год:</label>
           <select id="vacation-year" value={year} onChange={handleYearChange} disabled={loading}>
-            {[...Array(5)].map((_, i) => {
-              const y = new Date().getFullYear() + 2 - i;
-              return <option key={y} value={y}>{y}</option>;
-            })}
+             {/* Генерируем опции на основе динамического списка годов */}
+            {availableYears.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
           </select>
         </div>
          <div className="status-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
