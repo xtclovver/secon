@@ -96,22 +96,7 @@ const AdminDashboard = () => {
       <p>Добро пожаловать, {user?.full_name || 'Администратор'}!</p>
       <p>Здесь вы можете управлять пользователями, подразделениями и настройками системы.</p>
 
-      {/* Раздел управления (примеры) */}
-      <div className="admin-actions" style={{ marginTop: '30px', display: 'grid', gap: '15px', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-         <motion.div className="action-card card" whileHover={{ scale: 1.03 }}>
-           <FaUsersCog size={30} style={{ marginBottom: '10px', color: 'var(--accent-color)' }} />
-           <h3>Управление пользователями</h3>
-           <p>Добавление, редактирование и удаление пользователей.</p>
-           <button className="btn btn-secondary" disabled>Перейти (в разработке)</button>
-         </motion.div>
-
-         <motion.div className="action-card card" whileHover={{ scale: 1.03 }}>
-           <FaBuilding size={30} style={{ marginBottom: '10px', color: 'var(--success-color)' }} />
-           <h3>Управление подразделениями</h3>
-           <p>Создание и настройка структуры подразделений.</p>
-            <button className="btn btn-secondary" disabled>Перейти (в разработке)</button>
-         </motion.div>
-      </div>
+      {/* Раздел управления был здесь, но кнопки перенесены/удалены */}
 
       {/* Раздел управления лимитами отпусков */}
       <motion.div
