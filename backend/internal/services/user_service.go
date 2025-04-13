@@ -17,19 +17,22 @@ type UserServiceInterface interface {
 	GetUserProfile(userID int) (*models.UserProfileDTO, error)                                                  // Новый метод для получения профиля
 	GetAllUsers() ([]models.UserProfileDTO, error)                                                              // Новый метод для получения всех пользователей (админ)
 	UpdateUserAdmin(requestingUser *models.User, targetUserID int, updateData *models.UserUpdateAdminDTO) error // Новый метод для обновления админом
-	// TODO: Добавить другие методы сервиса пользователей по мере необходимости (GetUserByID и т.д.)
+	FindByID(id int) (*models.User, error)                                                                      // Добавлен метод для поиска по ID
+	// TODO: Добавить другие методы сервиса пользователей по мере необходимости
 }
 
 // UserService реализует UserServiceInterface
 type UserService struct {
-	userRepo repositories.UserRepositoryInterface // Зависимость от интерфейса репозитория пользователей
-	// Можно добавить другие зависимости, например, от репозитория лимитов, если нужно
+	userRepo repositories.UserRepositoryInterface
+	unitRepo repositories.OrganizationalUnitRepositoryInterface // Добавлена зависимость от репозитория юнитов
+	// TODO: Добавить зависимость от репозитория должностей, если он будет отдельным
 }
 
 // NewUserService создает новый экземпляр UserService
-func NewUserService(userRepo repositories.UserRepositoryInterface) *UserService { // Принимаем интерфейс
+func NewUserService(userRepo repositories.UserRepositoryInterface, unitRepo repositories.OrganizationalUnitRepositoryInterface) *UserService { // Добавлен unitRepo
 	return &UserService{
-		userRepo: userRepo, // Сохраняем интерфейс
+		userRepo: userRepo,
+		unitRepo: unitRepo, // Сохраняем unitRepo
 	}
 }
 
@@ -158,13 +161,49 @@ func (s *UserService) UpdateUserAdmin(requestingUser *models.User, targetUserID 
 		return fmt.Errorf("данные для обновления не предоставлены")
 	}
 
-	// Проверяем, есть ли что обновлять
-	if updateData.PositionID == nil && updateData.OrganizationalUnitID == nil && updateData.IsAdmin == nil && updateData.IsManager == nil {
+	// Проверяем, есть ли что обновлять (хотя бы одно поле не nil)
+	hasUpdate := updateData.PositionID != nil || updateData.OrganizationalUnitID != nil || updateData.IsAdmin != nil || updateData.IsManager != nil
+	if !hasUpdate {
 		return fmt.Errorf("нет полей для обновления")
 	}
 
+	// Проверка существования целевого пользователя
+	targetUser, err := s.userRepo.FindByID(targetUserID)
+	if err != nil {
+		return fmt.Errorf("ошибка проверки целевого пользователя ID %d: %w", targetUserID, err)
+	}
+	if targetUser == nil {
+		return fmt.Errorf("целевой пользователь с ID %d не найден", targetUserID)
+	}
+
+	// Проверка существования Юнита, если он указан
+	if updateData.OrganizationalUnitID != nil {
+		unitID := *updateData.OrganizationalUnitID
+		unit, err := s.unitRepo.GetByID(unitID) // Используем unitRepo
+		if err != nil {
+			return fmt.Errorf("ошибка проверки организационного юнита ID %d: %w", unitID, err)
+		}
+		if unit == nil {
+			return fmt.Errorf("организационный юнит с ID %d не найден", unitID)
+		}
+	}
+
+	// Проверка существования Должности, если она указана
+	if updateData.PositionID != nil {
+		positionID := *updateData.PositionID
+		// Предполагаем, что у userRepo есть метод для проверки должности
+		// TODO: Убедиться, что метод GetPositionByID существует и работает
+		position, err := s.userRepo.GetPositionByID(positionID) // Используем userRepo (или отдельный repo)
+		if err != nil {
+			return fmt.Errorf("ошибка проверки должности ID %d: %w", positionID, err)
+		}
+		if position == nil {
+			return fmt.Errorf("должность с ID %d не найдена", positionID)
+		}
+	}
+
 	// Вызов репозитория для обновления
-	err := s.userRepo.UpdateUserAdmin(targetUserID, updateData)
+	err = s.userRepo.UpdateUserAdmin(targetUserID, updateData)
 	if err != nil {
 		// Логирование ошибки
 		return fmt.Errorf("ошибка обновления пользователя (админ) в репозитории: %w", err)
@@ -173,5 +212,16 @@ func (s *UserService) UpdateUserAdmin(requestingUser *models.User, targetUserID 
 	return nil
 }
 
+// FindByID находит пользователя по его ID
+func (s *UserService) FindByID(id int) (*models.User, error) {
+	user, err := s.userRepo.FindByID(id) // Предполагаем, что у репозитория есть этот метод
+	if err != nil {
+		return nil, fmt.Errorf("ошибка поиска пользователя ID %d в репозитории: %w", id, err)
+	}
+	// Репозиторий должен вернуть nil, nil если пользователь не найден,
+	// поэтому дополнительная проверка на nil здесь не обязательна, если репозиторий следует этому контракту.
+	return user, nil
+}
+
 // TODO: Реализовать другие методы бизнес-логики для пользователей
-// Например: GetUserByID, CreateUser, ChangePassword и т.д.
+// Например: CreateUser, ChangePassword и т.д.

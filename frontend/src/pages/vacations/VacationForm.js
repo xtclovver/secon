@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { FaCalendarAlt, FaPlus, FaTrash, FaSave, FaPaperPlane } from 'react-icons/fa';
 import ru from 'date-fns/locale/ru';
 import { useUser } from '../../context/UserContext'; // Импортируем хук useUser
-import { createVacationRequest, submitVacationRequest } from '../../api/vacations';
+import { createVacationRequest } from '../../api/vacations'; // Убран submitVacationRequest
 import Loader from '../../components/ui/Loader/Loader'; // Импортируем Loader
 import 'react-datepicker/dist/react-datepicker.css';
 import './VacationForm.css';
@@ -18,10 +18,11 @@ const VacationForm = () => {
   const { user, refreshUserVacationLimits, limitsLoading } = useUser();
   const [year, setYear] = useState(new Date().getFullYear() + 1); // По умолчанию следующий год
   const [periods, setPeriods] = useState([{ startDate: null, endDate: null, daysCount: 0 }]);
-  const [status, setStatus] = useState('draft');
+  // const [status, setStatus] = useState('draft'); // Удалено состояние status
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [requestId, setRequestId] = useState(null); // Для сохранения ID черновика (если нужно)
+  const [formSubmitted, setFormSubmitted] = useState(false); // Новое состояние для индикации успешной отправки
+  // const [requestId, setRequestId] = useState(null); // Удалено состояние requestId
 
   // useEffect для принудительной перезагрузки данных при монтировании или изменении ключевых зависимостей
   useEffect(() => {
@@ -85,8 +86,9 @@ const VacationForm = () => {
     // Сброс формы при смене года
     setPeriods([{ startDate: null, endDate: null, daysCount: 0 }]);
     setErrors({});
-    setRequestId(null); // Сбрасываем ID заявки, если он был
-    setStatus('draft');
+    // setRequestId(null); // Сброс ID не нужен
+    // setStatus('draft'); // Сброс статуса не нужен
+    setFormSubmitted(false); // Сбрасываем флаг отправки при смене года
 
     // --- ВСЕГДА вызываем обновление лимитов при смене года ---
     if (user && !limitsLoading) { // Проверяем только, что есть user и не идет загрузка
@@ -217,41 +219,28 @@ const VacationForm = () => {
 
     console.log("Validation passed in handleSubmit, proceeding.");
     setSubmitting(true);
+    setFormSubmitted(false); // Сбрасываем флаг перед попыткой
     try {
-      let currentRequestId = requestId;
-
-      // 1. Создаем/обновляем черновик, если необходимо
-      // (Предполагаем, что API createVacationRequest может обрабатывать обновление,
-      // или всегда создает новую запись, что тоже приемлемо для упрощения)
+      // Создаем заявку сразу со статусом "На рассмотрении" (ID 2)
       const vacationRequest = {
         year,
         periods: periods.map(period => ({
-          // Отправляем дату в полном формате ISO 8601 (RFC3339), который Go понимает по умолчанию
-          // Ключи должны соответствовать JSON-тегам в Go модели (snake_case)
-          start_date: period.startDate.toISOString(), 
+          start_date: period.startDate.toISOString(),
           end_date: period.endDate.toISOString(),
-          days_count: period.daysCount 
+          days_count: period.daysCount
         })),
-        statusId: 1 // Черновик (или статус для отправки, если API требует)
+        // Ключ statusId удален, бэкенд теперь сам ставит StatusPending по умолчанию
+        // statusId: 2 // На рассмотрении
       };
 
-      // Всегда вызываем create, чтобы получить актуальный ID перед отправкой
-      // (или используем update, если API позволяет и requestId есть)
-      const createResponse = await createVacationRequest(vacationRequest);
-      currentRequestId = createResponse.id; // Получаем ID созданной/обновленной заявки
-      setRequestId(currentRequestId); // Обновляем состояние ID
-      toast.info('Черновик сохранен/обновлен.'); // Информируем пользователя
-
-      // ADD DELAY before submitting
-      await new Promise(resolve => setTimeout(resolve, 200)); // Add 200ms delay
-
-      // 2. Отправляем заявку с полученным ID
-      await submitVacationRequest(currentRequestId);
-      toast.success('Заявка успешно отправлена руководителю');
-      setStatus('submitted'); // Меняем статус в UI
+      // Вызываем только createVacationRequest
+      await createVacationRequest(vacationRequest);
+      // ID заявки больше не хранится в состоянии
+      toast.success('Заявка успешно создана и отправлена на рассмотрение');
+      setFormSubmitted(true); // Устанавливаем флаг успешной отправки
 
       // !!! ОБНОВЛЯЕМ ЛИМИТЫ ПОСЛЕ УСПЕШНОЙ ОТПРАВКИ !!!
-      console.log("Request submitted successfully. Refreshing limits...");
+      console.log("Request created and submitted successfully. Refreshing limits...");
       await refreshUserVacationLimits(year); // Вызываем обновление лимитов для текущего года формы
 
     } catch (error) {
@@ -359,7 +348,7 @@ const VacationForm = () => {
                       locale="ru"
                       placeholderText="Выберите дату"
                       className="date-input"
-                      disabled={submitting || status === 'submitted'}
+                      disabled={submitting || formSubmitted} // Используем formSubmitted
                     />
                     <FaCalendarAlt className="date-icon" />
                   </div>
@@ -381,7 +370,7 @@ const VacationForm = () => {
                       locale="ru"
                       placeholderText="Выберите дату"
                       className="date-input"
-                      disabled={submitting || status === 'submitted' || !period.startDate} // Блокируем, пока не выбрана дата начала
+                      disabled={submitting || formSubmitted || !period.startDate} // Используем formSubmitted
                     />
                     <FaCalendarAlt className="date-icon" />
                   </div>
@@ -399,7 +388,7 @@ const VacationForm = () => {
                   onClick={() => removePeriod(index)}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  disabled={submitting || status === 'submitted'}
+                  disabled={submitting || formSubmitted} // Используем formSubmitted
                 >
                   <FaTrash /> Удалить часть
                 </motion.button>
@@ -415,7 +404,7 @@ const VacationForm = () => {
             onClick={addPeriod}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            disabled={submitting || status === 'submitted'}
+            disabled={submitting || formSubmitted} // Используем formSubmitted
           >
             <FaPlus /> Добавить часть отпуска
           </motion.button>
@@ -432,18 +421,19 @@ const VacationForm = () => {
               limitsLoading || // Блокируем во время загрузки лимитов
               currentAvailableDays === null || // Блокируем, если лимит не загружен/не найден
               submitting ||
-              status === 'submitted' ||
+              formSubmitted || // Используем formSubmitted
               Object.values(errors).some(e => e) // Блокируем, если есть хотя бы одна ошибка
             }
           >
             {submitting ? <Loader size="small" inline /> : <FaPaperPlane />}
-            {submitting ? ' Отправка...' : ' Отправить'}
+            {submitting ? ' Отправка...' : ' Отправить на рассмотрение'}
           </motion.button>
         </div>
       </form>
       
-      {status === 'submitted' && (
-          <motion.div 
+      {/* Используем formSubmitted для отображения сообщения об успехе */}
+      {formSubmitted && (
+          <motion.div
             className="success-message" // Нужен CSS для этого класса
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

@@ -15,7 +15,7 @@ import { UserContext } from '../../context/UserContext'; // Импортируе
 
 // Константы статусов
 const STATUS = {
-  DRAFT: 1,
+  // DRAFT: 1, // Удалено
   PENDING: 2,
   APPROVED: 3,
   REJECTED: 4,
@@ -24,7 +24,7 @@ const STATUS = {
 
 // Карта статусов для отображения
 const STATUS_MAP = {
-  [STATUS.DRAFT]: { text: 'Черновик', class: 'status-draft', Icon: FaEdit },
+  // [STATUS.DRAFT]: { text: 'Черновик', class: 'status-draft', Icon: FaEdit }, // Удалено
   [STATUS.PENDING]: { text: 'На рассмотрении', class: 'status-pending', Icon: FaHourglassHalf },
   [STATUS.APPROVED]: { text: 'Утверждена', class: 'status-approved', Icon: FaCheckCircle },
   [STATUS.REJECTED]: { text: 'Отклонена', class: 'status-rejected', Icon: FaTimesCircle },
@@ -363,7 +363,7 @@ const VacationsList = () => {
                     <td>{vacation.year}</td>
                     <td><StatusBadge statusId={vacation.statusId} statusNameFromData={vacation.statusName} /></td>
                     <td>
-                      {vacation.periods.map((p, index) => (
+                      {vacation.periods?.map((p, index) => ( // Добавлена проверка на vacation.periods
                         <div key={p.id || index} style={{ whiteSpace: 'nowrap' }}>
                           {formatDate(p.startDate)} - {formatDate(p.endDate)} ({p.daysCount || 0} дн.)
                         </div>
@@ -374,10 +374,10 @@ const VacationsList = () => {
                     <td title={vacation.comment}>{vacation.comment ? `${vacation.comment.substring(0, 30)}${vacation.comment.length > 30 ? '...' : ''}` : '-'}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{formatDate(vacation.createdAt)}</td>
                     <td className="action-buttons" style={{ whiteSpace: 'nowrap' }}>
-                      {/* Пользователь может отменить свой Черновик или На рассмотрении */}
-                      {user && vacation.userId === user.id && (vacation.statusId === STATUS.DRAFT || vacation.statusId === STATUS.PENDING) && (
-                        <button onClick={() => handleCancel(vacation.id)} className="btn btn-sm btn-warning" title={vacation.statusId === STATUS.DRAFT ? "Удалить черновик" : "Отменить заявку"} disabled={loading}>
-                          {vacation.statusId === STATUS.DRAFT ? <FaTrashAlt /> : <FaBan />}
+                      {/* Пользователь может отменить свою заявку "На рассмотрении" */}
+                      {user && vacation.userId === user.id && vacation.statusId === STATUS.PENDING && (
+                        <button onClick={() => handleCancel(vacation.id)} className="btn btn-sm btn-warning" title="Отменить заявку" disabled={loading}>
+                           <FaBan /> {/* Всегда иконка отмены */}
                         </button>
                       )}
                       {/* Менеджер/Админ могут управлять заявкой "На рассмотрении" */}
@@ -392,7 +392,7 @@ const VacationsList = () => {
                         <button onClick={() => handleCancel(vacation.id)} className="btn btn-sm btn-danger" title="Отменить утвержденную заявку" disabled={loading}> <FaBan /> </button>
                       )}
                       {/* Отображаем прочерк, если действий нет */}
-                       {! (user && vacation.userId === user.id && (vacation.statusId === STATUS.DRAFT || vacation.statusId === STATUS.PENDING)) &&
+                       {! (user && vacation.userId === user.id && vacation.statusId === STATUS.PENDING) && // Убрана проверка на DRAFT
                         ! (canManageRequest(vacation.userId) && vacation.statusId === STATUS.PENDING) &&
                         ! (canManageRequest(vacation.userId) && vacation.statusId === STATUS.APPROVED) &&
                         '-'}

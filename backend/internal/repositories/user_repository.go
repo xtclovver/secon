@@ -26,6 +26,7 @@ type UserRepositoryInterface interface {
 	UpdateUserAdmin(userID int, updateData *models.UserUpdateAdminDTO) error                             // Новый метод для обновления админом
 	FindByOrganizationalUnitID(unitID int) ([]*models.User, error)                                       // Найти пользователей по ID орг. юнита
 	GetUsersWithLimitsByOrganizationalUnit(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) // Новый метод
+	GetPositionByID(id int) (*models.Position, error)                                                    // Добавлен метод для получения должности по ID
 	// TODO: Добавить интерфейсы для работы с OrganizationalUnit
 }
 
@@ -839,6 +840,23 @@ func (r *UserRepository) UpdateUserAdmin(userID int, updateData *models.UserUpda
 	}
 
 	return nil
+}
+
+// GetPositionByID получает информацию о должности по ее ID
+func (r *UserRepository) GetPositionByID(id int) (*models.Position, error) {
+	query := `SELECT id, name FROM positions WHERE id = ?`
+	row := r.db.QueryRow(query, id)
+
+	var position models.Position
+	err := row.Scan(&position.ID, &position.Name)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // Должность не найдена, ошибки нет
+		}
+		return nil, fmt.Errorf("ошибка получения должности по ID %d: %w", id, err)
+	}
+	return &position, nil
 }
 
 // TODO: Добавить репозиторий и методы для работы с organizational_units (CRUD, получение дерева)

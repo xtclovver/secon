@@ -14,14 +14,8 @@ import (
 // ErrLimitNotFound - Ошибка, возвращаемая, когда лимит отпуска не найден.
 var ErrLimitNotFound = errors.New("лимит отпуска не найден для данного пользователя и года")
 
-// statusIDToNameMap - Вспомогательная карта для получения имени статуса по ID
-var statusIDToNameMap = map[int]string{
-	models.StatusDraft:     "Черновик",
-	models.StatusPending:   "На рассмотрении",
-	models.StatusApproved:  "Утверждена",
-	models.StatusRejected:  "Отклонена",
-	models.StatusCancelled: "Отменена",
-}
+// statusIDToNameMap больше не используется для получения имени статуса в GetAllVacationRequests
+// var statusIDToNameMap = map[int]string{ ... } // Закомментировано или удалить
 
 // VacationRepositoryInterface определяет методы для работы с данными отпусков.
 // (Интерфейс перемещен сюда для лучшей читаемости)
@@ -404,12 +398,15 @@ func (r *VacationRepository) GetVacationRequestsByOrganizationalUnit(unitID int,
 
 // GetAllVacationRequests получает все заявки для админов/менеджеров с фильтрами (использует срез unitIDs)
 func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilter *int, userIDFilter *int, unitIDsFilter []int) ([]models.VacationRequestAdminView, error) { // unitIDFilter *int -> unitIDsFilter []int
+	// Запрос теперь явно соединяется с vacation_status для получения имени статуса
 	queryBase := `
 		SELECT
 			vr.id, vr.user_id, vr.year, vr.status_id, vr.days_requested, vr.comment, vr.created_at, vr.updated_at,
-			u.full_name
+			u.full_name,
+			COALESCE(vs.name, 'Неизвестно') AS status_name
 		FROM vacation_requests vr
-		JOIN users u ON vr.user_id = u.id`
+		JOIN users u ON vr.user_id = u.id
+		LEFT JOIN vacation_status vs ON vr.status_id = vs.id` // Используем LEFT JOIN на случай отсутствия статуса в таблице
 
 	conditions := []string{}
 	args := []interface{}{}
@@ -460,7 +457,11 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 	for rowsReq.Next() {
 		var req models.VacationRequestAdminView
 		var comment sql.NullString
-		err := rowsReq.Scan(&req.ID, &req.UserID, &req.Year, &req.StatusID, &req.DaysRequested, &comment, &req.CreatedAt, &req.UpdatedAt, &req.UserFullName)
+		// Добавляем req.StatusName в Scan
+		err := rowsReq.Scan(
+			&req.ID, &req.UserID, &req.Year, &req.StatusID, &req.DaysRequested, &comment,
+			&req.CreatedAt, &req.UpdatedAt, &req.UserFullName, &req.StatusName,
+		)
 		if err != nil {
 			// Возвращаем ошибку сканирования немедленно
 			return nil, fmt.Errorf("ошибка сканирования AdminView заявки: %w", err)
@@ -468,11 +469,12 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 		if comment.Valid {
 			req.Comment = comment.String
 		}
-		if name, ok := statusIDToNameMap[req.StatusID]; ok {
-			req.StatusName = name
-		} else {
-			req.StatusName = "Неизвестно"
-		}
+		// Удаляем логику с statusIDToNameMap, так как имя статуса теперь приходит из БД
+		// if name, ok := statusIDToNameMap[req.StatusID]; ok {
+		// 	req.StatusName = name
+		// } else {
+		// 	req.StatusName = "Неизвестно"
+		// }
 		req.Periods = []models.VacationPeriod{}
 		requestsMap[req.ID] = &req
 		requestIDs = append(requestIDs, req.ID)
