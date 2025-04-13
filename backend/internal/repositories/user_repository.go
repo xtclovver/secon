@@ -647,7 +647,8 @@ func (r *UserRepository) GetUsersByUnitIDs(unitIDs []int) ([]models.User, error)
 	}
 
 	// Генерируем плейсхолдеры (?, ?, ...) для IN клаузы
-	placeholders := sqlRepeatParams(len(unitIDs))
+	// Исправлено: передаем len(unitIDs) - 1
+	placeholders := sqlRepeatParams(len(unitIDs) - 1)
 	query := fmt.Sprintf(`
 		SELECT
 			u.id, u.login, u.full_name, u.organizational_unit_id, u.position_id,

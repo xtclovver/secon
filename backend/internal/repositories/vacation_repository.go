@@ -429,7 +429,8 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 	// Изменено: фильтр по срезу ID юнитов
 	if len(unitIDsFilter) > 0 {
 		// Генерируем плейсхолдеры (?, ?, ...)
-		placeholders := sqlRepeatParams(len(unitIDsFilter))
+		// Исправлено: передаем len(unitIDsFilter) - 1
+		placeholders := sqlRepeatParams(len(unitIDsFilter) - 1)
 		conditions = append(conditions, fmt.Sprintf("u.organizational_unit_id IN (?%s)", placeholders))
 		// Добавляем ID юнитов в аргументы
 		for _, id := range unitIDsFilter {
@@ -442,6 +443,10 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 		query += " WHERE " + sqlJoinStrings(conditions, " AND ")
 	}
 	query += " ORDER BY vr.created_at DESC"
+
+	// Log the query and arguments before execution
+	log.Printf("[Repo GetAllVacationRequests] Executing query: %s", query)
+	log.Printf("[Repo GetAllVacationRequests] With arguments: %v", args)
 
 	rowsReq, err := r.db.Query(query, args...)
 	if err != nil {
@@ -457,8 +462,8 @@ func (r *VacationRepository) GetAllVacationRequests(yearFilter *int, statusFilte
 		var comment sql.NullString
 		err := rowsReq.Scan(&req.ID, &req.UserID, &req.Year, &req.StatusID, &req.DaysRequested, &comment, &req.CreatedAt, &req.UpdatedAt, &req.UserFullName)
 		if err != nil {
-			log.Printf("Ошибка сканирования AdminView заявки: %v\n", err)
-			continue
+			// Возвращаем ошибку сканирования немедленно
+			return nil, fmt.Errorf("ошибка сканирования AdminView заявки: %w", err)
 		}
 		if comment.Valid {
 			req.Comment = comment.String

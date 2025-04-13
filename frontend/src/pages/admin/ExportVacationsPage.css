@@ -1,0 +1,147 @@
+/* --- Общие стили страницы (адаптировано из UserManagementPage) --- */
+.export-vacations-page {
+  padding: 25px;
+  background-color: var(--bg-secondary); /* Фон как в меню */
+  color: var(--text-color);
+  margin: 30px auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  max-width: 800px; /* Ограничим ширину */
+}
+
+.export-vacations-page h2 {
+  color: var(--accent-color); /* Акцентный цвет */
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 1.8em;
+  text-align: center; /* Выравнивание по центру */
+}
+
+/* --- Стили блока выбора отделов --- */
+.department-selection {
+  margin-bottom: 25px;
+  padding: 20px; /* Увеличим паддинг */
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md); /* Используем переменную */
+  background-color: var(--bg-primary); /* Немного другой фон для выделения */
+  box-shadow: var(--shadow-sm);
+}
+
+.department-selection h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em; /* Немного крупнее */
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.select-all-container {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color-light);
+  display: flex; /* Для выравнивания */
+  align-items: center;
+}
+
+.select-all-container input[type="checkbox"] {
+  margin-right: 10px;
+  cursor: pointer;
+  transform: scale(1.1); /* Немного увеличим */
+}
+
+.select-all-container label {
+  font-weight: 600; /* Жирнее */
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.department-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Немного шире колонки */
+  gap: 12px; /* Увеличим промежуток */
+  max-height: 250px; /* Увеличим высоту */
+  overflow-y: auto;
+  padding: 15px;
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--input-bg-color); /* Фон как у инпутов */
+}
+
+.department-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px; /* Увеличим паддинг */
+  border-radius: var(--border-radius-xs);
+  transition: background-color 0.2s ease;
+}
+
+.department-item:hover {
+  background-color: var(--bg-hover); /* Фон при наведении */
+}
+
+.department-item input[type="checkbox"] {
+  margin-right: 10px;
+  cursor: pointer;
+  transform: scale(1.1); /* Немного увеличим */
+}
+
+.department-item label {
+  cursor: pointer;
+  flex-grow: 1;
+  color: var(--text-color);
+}
+
+/* --- Стили кнопки экспорта (адаптировано из UserManagementPage) --- */
+.export-button {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  background-color: var(--button-save-bg, var(--success-color)); /* Цвет как у кнопки Сохранить */
+  color: var(--button-save-color, #fff);
+  border: none;
+  border-radius: var(--border-radius-sm);
+  font-size: 1.1em; /* Крупнее */
+  font-weight: 600; /* Жирнее */
+  cursor: pointer;
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  margin-top: 30px; /* Больше отступ */
+  box-shadow: var(--shadow-xs);
+}
+
+.export-button:hover:not(:disabled) {
+  background-color: var(--button-save-hover-bg, color-mix(in srgb, var(--success-color) 85%, black));
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.export-button:disabled {
+  background-color: var(--disabled-bg-color);
+  opacity: 0.6; /* Менее прозрачный */
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* --- Стили для состояния загрузки/ошибки (адаптировано) --- */
+.export-vacations-page p {
+  text-align: center;
+  font-style: italic;
+  color: var(--text-secondary);
+  margin-top: 20px;
+  padding: 15px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--border-radius-sm);
+}
+
+.error-message { /* Добавляем стиль для ошибок, если он понадобится */
+  color: var(--danger-color);
+  background-color: color-mix(in srgb, var(--danger-color) 15%, var(--bg-secondary));
+  padding: 15px;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger-color) 40%, var(--bg-secondary));
+  margin-top: 20px;
+  text-align: center;
+}

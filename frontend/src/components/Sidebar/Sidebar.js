@@ -11,7 +11,8 @@ import {
   FaChevronRight,
   FaUserShield,
   FaUserTie,
-  FaSitemap
+  FaSitemap,
+  FaFileExport // Добавлено для иконки экспорта
 } from 'react-icons/fa';
 import { ThemeContext } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
@@ -146,6 +147,15 @@ const Sidebar = () => {
                   <FaUsersCog /> {/* Используем иконку управления пользователями */}
                   <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
                     Управление пользователями
+                  </motion.span>
+                </NavLink>
+              </li>
+              {/* Добавлена ссылка на экспорт отпусков */}
+              <li>
+                <NavLink to="/admin/export-vacations" className={({ isActive }) => isActive ? 'active' : ''}>
+                  <FaFileExport />
+                  <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
+                    Экспорт отпусков
                   </motion.span>
                 </NavLink>
               </li>
