@@ -12,8 +12,61 @@ import './VacationCalendar.css';
 // Вспомогательная функция для форматирования дат
 const formatDate = (dateString) => {
   if (!dateString) return '';
-  return new Date(dateString).toLocaleDateString('ru-RU');
+  // Убедимся, что дата валидна перед форматированием
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) {
+      console.warn("Invalid date string passed to formatDate:", dateString);
+      return 'Неверная дата';
+  }
+  return date.toLocaleDateString('ru-RU');
 };
+
+// Вспомогательная функция для вычисления непересекающихся дат
+const getNonOverlappingDatesString = (userStartDateStr, userEndDateStr, overlapStartDateStr, overlapEndDateStr) => {
+    try {
+        const userStart = new Date(userStartDateStr); userStart.setUTCHours(0, 0, 0, 0);
+        const userEnd = new Date(userEndDateStr); userEnd.setUTCHours(0, 0, 0, 0);
+        const overlapStart = new Date(overlapStartDateStr); overlapStart.setUTCHours(0, 0, 0, 0);
+        const overlapEnd = new Date(overlapEndDateStr); overlapEnd.setUTCHours(0, 0, 0, 0);
+
+        // Проверка валидности дат
+        if (isNaN(userStart.getTime()) || isNaN(userEnd.getTime()) || isNaN(overlapStart.getTime()) || isNaN(overlapEnd.getTime())) {
+            console.error("Invalid date passed to getNonOverlappingDatesString");
+            return '';
+        }
+
+        const nonOverlapParts = [];
+
+        // Часть до пересечения
+        if (userStart < overlapStart) {
+            const dayBeforeOverlap = new Date(overlapStart);
+            dayBeforeOverlap.setUTCDate(dayBeforeOverlap.getUTCDate() - 1);
+            if (userStart <= dayBeforeOverlap) { // Убедимся, что есть хотя бы один день
+                 nonOverlapParts.push(`${formatDate(userStart)} - ${formatDate(dayBeforeOverlap)}`);
+            }
+        }
+
+        // Часть после пересечения
+        if (userEnd > overlapEnd) {
+            const dayAfterOverlap = new Date(overlapEnd);
+            dayAfterOverlap.setUTCDate(dayAfterOverlap.getUTCDate() + 1);
+             if (dayAfterOverlap <= userEnd) { // Убедимся, что есть хотя бы один день
+                nonOverlapParts.push(`${formatDate(dayAfterOverlap)} - ${formatDate(userEnd)}`);
+             }
+        }
+
+        if (nonOverlapParts.length === 0) {
+            return ''; // Весь период пользователя пересекается
+        }
+
+        return `Не пересекается: ${nonOverlapParts.join('; ')}`;
+
+    } catch (e) {
+        console.error("Error calculating non-overlapping dates:", e);
+        return ''; // Возвращаем пустую строку в случае ошибки
+    }
+};
+
 
 // Вспомогательная функция для проверки, находится ли дата в периоде (сравнение UTC)
 // Используется для отпусков (где не было проблем)
@@ -310,19 +363,52 @@ const VacationCalendar = () => {
                                 >
                                     <div className="conflict-item-header">
                                         <FaExclamationTriangle style={{ marginRight: '8px', color: 'var(--warning-color)' }} />
-                                        <strong>Пересечение: {formatDate(conflict.overlapStartDate)} - {formatDate(conflict.overlapEndDate)}</strong>
+                                        <strong>Пересечение: {formatDate(conflict.overlap_start_date)} - {formatDate(conflict.overlap_end_date)}</strong>
                                     </div>
                                     <div className="conflict-item-users">
+                                        {/* Детали первого пользователя */}
                                         <div className="conflict-user-detail">
                                             <FaUser style={{ marginRight: '5px', color: 'var(--text-secondary)' }} />
-                                            <span>{conflict.original_user_full_name ?? `ID: ${conflict.original_user_id}`}</span>
-                                            <small style={{ marginLeft: '5px', color: 'var(--text-secondary)' }}>(Заявка #{conflict.original_request_id})</small>
+                                            <div>
+                                                <strong>{conflict.original_user_full_name ?? `ID: ${conflict.original_user_id}`}</strong>
+                                                <small style={{ marginLeft: '5px', color: 'var(--text-secondary)' }}>(Заявка #{conflict.original_request_id})</small>
+                                                <div className="conflict-user-dates">
+                                                    Полный отпуск: {formatDate(conflict.original_start_date)} - {formatDate(conflict.original_end_date)}
+                                                </div>
+                                                <div className="conflict-user-non-overlap">
+                                                    {getNonOverlappingDatesString(
+                                                        conflict.original_start_date,
+                                                        conflict.original_end_date,
+                                                        conflict.overlap_start_date,
+                                                        conflict.overlap_end_date
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="conflict-separator"> | </div>
+
+                                        {/* Отображение дат пересечения вместо разделителя */}
+                                        <div className="conflict-separator">
+                                            <strong>Пересечение: {formatDate(conflict.overlap_start_date)} - {formatDate(conflict.overlap_end_date)}</strong>
+                                        </div>
+
+                                        {/* Детали второго пользователя */}
                                         <div className="conflict-user-detail">
                                             <FaUser style={{ marginRight: '5px', color: 'var(--text-secondary)' }} />
-                                            <span>{conflict.conflicting_user_full_name ?? `ID: ${conflict.conflicting_user_id}`}</span>
-                                            <small style={{ marginLeft: '5px', color: 'var(--text-secondary)' }}>(Заявка #{conflict.conflicting_request_id})</small>
+                                            <div>
+                                                <strong>{conflict.conflicting_user_full_name ?? `ID: ${conflict.conflicting_user_id}`}</strong>
+                                                <small style={{ marginLeft: '5px', color: 'var(--text-secondary)' }}>(Заявка #{conflict.conflicting_request_id})</small>
+                                                <div className="conflict-user-dates">
+                                                    Полный отпуск: {formatDate(conflict.conflicting_start_date)} - {formatDate(conflict.conflicting_end_date)}
+                                                </div>
+                                                 <div className="conflict-user-non-overlap">
+                                                     {getNonOverlappingDatesString(
+                                                         conflict.conflicting_start_date,
+                                                         conflict.conflicting_end_date,
+                                                         conflict.overlap_start_date,
+                                                         conflict.overlap_end_date
+                                                     )}
+                                                 </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </motion.div>
@@ -363,31 +449,48 @@ const VacationCalendar = () => {
         }
         .conflict-user-detail {
           display: flex;
-          align-items: center;
+          align-items: flex-start; /* Выравнивание по верху для многострочного текста */
+          flex-basis: 48%; /* Немного меньше для отступов */
+          justify-content: flex-start;
+        }
+        .conflict-user-detail > div { /* Контейнер для текста пользователя */
+            margin-left: 5px;
+        }
+        .conflict-user-dates, .conflict-user-non-overlap {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-top: 3px;
         }
         .conflict-separator {
           text-align: center;
-          color: var(--text-secondary);
-          font-weight: bold;
-          margin: 2px 0;
-          display: none;
+          color: var(--warning-color); /* Используем цвет предупреждения для акцента */
+          font-weight: 500;
+          margin: 8px 0; /* Добавим отступы сверху/снизу */
+          padding: 5px;
+          border-radius: var(--border-radius-small);
+          background-color: rgba(var(--warning-color-rgb), 0.1); /* Легкий фон */
+          font-size: 0.85em;
+          /* display: block; /* Убираем скрытие/показ по медиа-запросу, показываем всегда */
         }
 
         @media (min-width: 600px) {
           .conflict-item-users {
             flex-direction: row;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
+            align-items: flex-start; /* Оставляем выравнивание по верху */
+            justify-content: center; /* Центрируем содержимое */
+            gap: 15px; /* Немного увеличим отступ */
           }
           .conflict-separator {
-            display: inline-block;
-          }
-          .conflict-user-detail {
-             flex-basis: 45%;
+             /* Убираем display: inline-block, так как он теперь блочный */
+             margin: 0 10px; /* Добавляем горизонтальные отступы на больших экранах */
+             flex-shrink: 0; /* Предотвращаем сжатие блока с датами */
+              text-align: center; /* Центрируем текст */
+           }
+           .conflict-user-detail {
+             /* flex-basis: 45%; */ /* Убираем фиксированную ширину для лучшего центрирования */
              justify-content: flex-start;
-          }
-        }
+           }
+         }
 
         .markers-container {
           display: flex;
