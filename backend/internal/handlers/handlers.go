@@ -121,11 +121,6 @@ func (h *AppHandler) SetVacationLimit(c *gin.Context) {
 func (h *AppHandler) CreateVacationRequest(c *gin.Context) {
 	var request models.VacationRequest
 
-	// Логируем тело запроса перед привязкой
-	// bodyBytes, _ := io.ReadAll(c.Request.Body) // Читаем тело
-	// c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Восстанавливаем тело для ShouldBindJSON
-	// log.Printf("Получено тело запроса CreateVacationRequest: %s", string(bodyBytes))
-
 	// Привязываем JSON с использованием encoding/json напрямую
 	decoder := json.NewDecoder(c.Request.Body)
 	if err := decoder.Decode(&request); err != nil {

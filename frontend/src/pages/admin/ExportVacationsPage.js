@@ -393,7 +393,8 @@ const ExportVacationsPage = () => {
     for (let R = dataStartIndex; R < worksheetData.length; ++R) {
         for (let C = 0; C <= 12; ++C) {
             let style = styles.dataCellLeft; // По умолчанию выравнивание влево
-            if (C === 0 || (C >= 4 && C <= 7)) { // №, Таб. номер, Дни
+            // Добавлены скобки для явного указания порядка операций (no-mixed-operators)
+            if ((C === 0) || (C >= 4 && C <= 7)) { // №, Таб. номер, Дни
                 style = styles.dataCellCenter;
             } else if (C === 8 || C === 9 || C === 11) { // Даты
                  style = styles.dataCellCenter;
