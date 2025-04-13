@@ -38,6 +38,11 @@
   color: var(--text-primary);
   border-radius: var(--border-radius-sm);
   cursor: pointer;
+  /* Скрываем стандартную стрелку браузера */
+  -webkit-appearance: none;
+  appearance: none;
+  /* Добавляем отступ справа для кастомной стрелки */
+  padding-right: 30px; /* Убедитесь, что этого достаточно */
 }
 
 .vacation-calendar-container .controls select:disabled {
