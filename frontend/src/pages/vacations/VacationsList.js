@@ -11,7 +11,6 @@ import {
 } from '../../api/vacations';
 import Loader from '../../components/ui/Loader/Loader';
 import { UserContext } from '../../context/UserContext'; // Импортируем UserContext
-// import './VacationsList.css'; // Раскомментируйте, если есть стили
 
 // Константы статусов
 const STATUS = {

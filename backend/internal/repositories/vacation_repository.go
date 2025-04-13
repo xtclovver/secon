@@ -14,9 +14,6 @@ import (
 // ErrLimitNotFound - Ошибка, возвращаемая, когда лимит отпуска не найден.
 var ErrLimitNotFound = errors.New("лимит отпуска не найден для данного пользователя и года")
 
-// statusIDToNameMap больше не используется для получения имени статуса в GetAllVacationRequests
-// var statusIDToNameMap = map[int]string{ ... } // Закомментировано или удалить
-
 // VacationRepositoryInterface определяет методы для работы с данными отпусков.
 // (Интерфейс перемещен сюда для лучшей читаемости)
 type VacationRepositoryInterface interface {
@@ -37,10 +34,6 @@ type VacationRepositoryInterface interface {
 
 	// --- Уведомления ---
 	CreateNotification(notification *models.Notification) error
-
-	// --- Периоды (при необходимости) ---
-	// GetPeriodsByRequestID(requestID int) ([]models.VacationPeriod, error) // Пример
-	// DeletePeriodsByRequestID(requestID int) error // Пример
 
 	// --- Dashboard Data ---
 	CountPendingRequestsByUnitIDs(unitIDs []int) (int, error)

@@ -29,7 +29,6 @@ const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
 
 // Other pages (lazy loading)
-// const UserDashboard = lazy(() => import('./pages/dashboard/UserDashboard')); // Больше не используется напрямую
 const UniversalDashboard = lazy(() => import('./pages/dashboard/UniversalDashboard')); // Добавляем универсальный дашборд
 const ManagerDashboard = lazy(() => import('./pages/dashboard/ManagerDashboard'));
 const AdminDashboard = lazy(() => import('./pages/dashboard/AdminDashboard'));

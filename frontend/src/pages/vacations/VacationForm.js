@@ -319,7 +319,6 @@ const VacationForm = () => {
       
       {/* Форма теперь вызывает handleSubmit при отправке */}
       <form onSubmit={handleSubmit}> 
-        {/* <AnimatePresence> */} {/* Временно убираем AnimatePresence */}
           {periods.map((period, index) => (
             <motion.div
               key={index}
@@ -395,7 +394,6 @@ const VacationForm = () => {
               )}
             </motion.div>
           ))}
-        {/* </AnimatePresence> */} {/* Временно убираем AnimatePresence */}
         
         <div className="form-actions">
           <motion.button

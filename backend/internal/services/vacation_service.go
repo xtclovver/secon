@@ -35,8 +35,6 @@ type VacationServiceInterface interface {
 }
 
 // VacationRepositoryInterface определяет методы для работы с данными отпусков.
-// Перемещено из vacation_repository.go для корректной компиляции сервиса
-// ВАЖНО: Это определение должно быть синхронизировано с тем, что в vacation_repository.go
 type VacationRepositoryInterface interface {
 	// --- Лимиты ---
 	GetVacationLimit(userID int, year int) (*models.VacationLimit, error)
@@ -224,9 +222,6 @@ func (s *VacationService) SubmitVacationRequest(requestID int, userID int) error
 		return errors.New("нет прав на отправку этой заявки")
 	}
 	// Удалена проверка на StatusDraft, так как заявки теперь сразу Pending или другой статус
-	// if req.StatusID != models.StatusDraft {
-	// 	return errors.New("можно отправить только заявку в статусе 'Черновик'")
-	// }
 	if err = s.ValidateVacationRequest(req); err != nil {
 		return fmt.Errorf("ошибка валидации заявки перед отправкой: %w", err)
 	}
