@@ -109,29 +109,11 @@ const Sidebar = () => {
               </NavLink>
             </li>
           )}
-          {/* Пункты меню для руководителя */}
-          {user?.isManager && (
-            <li className="role-section manager-section">
-              <NavLink to="/manager/dashboard" className={({isActive}) => isActive ? 'active' : ''}>
-                <FaUserTie />
-                <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
-                  Дашборд руководителя
-                </motion.span>
-              </NavLink>
-              {/* Другие пункты для руководителя */}
-            </li>
-          )}
+          {/* Разделитель для руководителя */}
+          {user?.isManager && <hr className="sidebar-divider manager-divider" />}
           {/* Пункты меню для администратора */}
           {user?.isAdmin && (
             <>
-              <li className="role-section admin-section">
-                 <NavLink to="/admin/dashboard" className={({isActive}) => isActive ? 'active' : ''}>
-                  <FaUserShield />
-                  <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
-                    Админ-панель
-                  </motion.span>
-                </NavLink>
-              </li>
               {/* Восстановлена ссылка на управление подразделениями (путь исправлен на /admin/units) */}
               <li>
                 <NavLink to="/admin/units" className={({ isActive }) => isActive ? 'active' : ''}>
