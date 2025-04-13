@@ -131,9 +131,17 @@ const Sidebar = () => {
                   </motion.span>
                 </NavLink>
               </li>
-              {/* Ссылка на управление подразделениями удалена по запросу */}
+              {/* Восстановлена ссылка на управление подразделениями (путь исправлен на /admin/units) */}
               <li>
-                {/* Добавлена ссылка на управление пользователями */}
+                <NavLink to="/admin/units" className={({ isActive }) => isActive ? 'active' : ''}>
+                  <FaSitemap /> {/* Иконка для подразделений */}
+                  <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
+                    Управление подразделениями
+                  </motion.span>
+                </NavLink>
+              </li>
+              <li>
+                {/* Ссылка на управление пользователями */}
                 <NavLink to="/admin/users" className={({ isActive }) => isActive ? 'active' : ''}>
                   <FaUsersCog /> {/* Используем иконку управления пользователями */}
                   <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
