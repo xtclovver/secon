@@ -121,6 +121,14 @@ type UserUpdateDTO struct {
 	OrganizationalUnitID *int    `json:"organizational_unit_id"` // Указатель для опционального обновления юнита
 }
 
+// UserUpdateAdminDTO - структура для обновления данных пользователя администратором
+type UserUpdateAdminDTO struct {
+	PositionID           *int  `json:"position_id"`            // Указатель для опционального обновления должности
+	OrganizationalUnitID *int  `json:"organizational_unit_id"` // Указатель для опционального обновления юнита
+	IsAdmin              *bool `json:"is_admin"`               // Указатель для опционального обновления статуса админа
+	IsManager            *bool `json:"is_manager"`             // Указатель для опционального обновления статуса менеджера
+}
+
 // Position - модель должности (без GroupID)
 type Position struct {
 	ID   int    `json:"id" db:"id"`

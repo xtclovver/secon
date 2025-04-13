@@ -22,6 +22,8 @@ type UserRepositoryInterface interface {
 	GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error)
 	GetAllPositions() ([]models.Position, error)                                                         // Восстановлен метод для получения всех должностей
 	GetUserProfileByID(userID int) (*models.UserProfileDTO, error)                                       // Новый метод для профиля
+	GetAllUsers() ([]models.UserProfileDTO, error)                                                       // Новый метод для получения всех пользователей (для админки)
+	UpdateUserAdmin(userID int, updateData *models.UserUpdateAdminDTO) error                             // Новый метод для обновления админом
 	FindByOrganizationalUnitID(unitID int) ([]*models.User, error)                                       // Найти пользователей по ID орг. юнита
 	GetUsersWithLimitsByOrganizationalUnit(unitID int, year int) ([]models.UserWithLimitAdminDTO, error) // Новый метод
 	// TODO: Добавить интерфейсы для работы с OrganizationalUnit
@@ -715,6 +717,127 @@ func (r *UserRepository) GetUsersByUnitIDs(unitIDs []int) ([]models.User, error)
 	}
 
 	return users, nil
+}
+
+// GetAllUsers получает список всех пользователей с основной информацией для админ-панели
+func (r *UserRepository) GetAllUsers() ([]models.UserProfileDTO, error) {
+	query := `
+		SELECT
+			u.id, u.login, u.full_name,
+			p.name AS position_name,
+			ou.name AS department_name, -- Получаем имя непосредственного юнита
+			u.is_admin, u.is_manager, u.created_at, u.updated_at
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		LEFT JOIN organizational_units ou ON u.organizational_unit_id = ou.id -- JOIN для имени юнита
+		ORDER BY u.full_name ASC`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса всех пользователей: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.UserProfileDTO
+	for rows.Next() {
+		var user models.UserProfileDTO
+		var positionName sql.NullString
+		var departmentName sql.NullString // Для имени юнита
+
+		err := rows.Scan(
+			&user.ID, &user.Login, &user.FullName,
+			&positionName,
+			&departmentName, // Сканируем имя юнита
+			&user.IsAdmin, &user.IsManager, &user.CreatedAt, &user.UpdatedAt,
+		)
+		if err != nil {
+			// log.Printf("Ошибка сканирования пользователя в GetAllUsers: %v", err)
+			continue // Пропускаем пользователя с ошибкой
+		}
+
+		// Устанавливаем имя должности
+		if positionName.Valid {
+			user.PositionName = &positionName.String
+		} else {
+			user.PositionName = nil
+		}
+
+		// Устанавливаем имя департамента (непосредственного юнита)
+		// В UserProfileDTO есть Department, SubDepartment, Sector.
+		// Для простоты пока запишем имя юнита в Department.
+		// Если нужна полная иерархия, потребуется логика как в GetUserProfileByID.
+		if departmentName.Valid {
+			user.Department = &departmentName.String
+		} else {
+			user.Department = nil
+		}
+		// Оставляем SubDepartment и Sector как nil для этого метода
+		user.SubDepartment = nil
+		user.Sector = nil
+
+		users = append(users, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации по списку всех пользователей: %w", err)
+	}
+
+	return users, nil
+}
+
+// UpdateUserAdmin обновляет данные пользователя администратором
+func (r *UserRepository) UpdateUserAdmin(userID int, updateData *models.UserUpdateAdminDTO) error {
+	if updateData == nil {
+		return errors.New("данные для обновления не предоставлены")
+	}
+
+	query := "UPDATE users SET "
+	args := []interface{}{}
+	updates := []string{}
+
+	if updateData.PositionID != nil {
+		updates = append(updates, "position_id = ?")
+		args = append(args, *updateData.PositionID)
+	}
+	if updateData.OrganizationalUnitID != nil {
+		updates = append(updates, "organizational_unit_id = ?")
+		args = append(args, *updateData.OrganizationalUnitID)
+	}
+	if updateData.IsAdmin != nil {
+		updates = append(updates, "is_admin = ?")
+		args = append(args, *updateData.IsAdmin)
+	}
+	if updateData.IsManager != nil {
+		updates = append(updates, "is_manager = ?")
+		args = append(args, *updateData.IsManager)
+	}
+
+	if len(updates) == 0 {
+		return errors.New("нет полей для обновления")
+	}
+
+	// Добавляем updated_at и формируем запрос
+	updates = append(updates, "updated_at = CURRENT_TIMESTAMP")
+	query += strings.Join(updates, ", ")
+	query += " WHERE id = ?"
+	args = append(args, userID)
+
+	// Выполняем запрос
+	result, err := r.db.Exec(query, args...)
+	if err != nil {
+		// TODO: Добавить обработку ошибок (например, неверный ID юнита/должности)
+		return fmt.Errorf("ошибка выполнения запроса на обновление пользователя админом: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("ошибка получения количества обновленных строк (админ): %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("пользователь для обновления админом не найден или данные не изменились")
+	}
+
+	return nil
 }
 
 // TODO: Добавить репозиторий и методы для работы с organizational_units (CRUD, получение дерева)

@@ -1,0 +1,163 @@
+/* --- Общие стили страницы (адаптировано из DepartmentManagementPage) --- */
+.user-management-page {
+  padding: 25px;
+  background-color: var(--bg-secondary); /* Фон как в меню */
+  color: var(--text-color);
+  margin: 30px auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  overflow-x: auto; /* Добавляем горизонтальный скролл для таблицы на маленьких экранах */
+}
+
+.user-management-page h2 {
+  color: var(--accent-color); /* Акцентный цвет */
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 1.8em;
+  text-align: center; /* Выравнивание по центру */
+}
+
+/* --- Стили таблицы --- */
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  min-width: 800px; /* Минимальная ширина, чтобы колонки не сжимались слишком сильно */
+}
+
+.users-table th,
+.users-table td {
+  border: 1px solid var(--border-color);
+  padding: 12px 15px; /* Немного увеличим паддинг */
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap; /* Предотвращаем перенос текста в ячейках */
+}
+
+.users-table th {
+  background-color: var(--table-header-bg, var(--bg-tertiary)); /* Фон заголовка */
+  color: var(--table-header-color, var(--text-primary));
+  font-weight: 600; /* Немного жирнее */
+  position: sticky; /* Прилипающий заголовок */
+  top: 0; /* Прилипает к верху при скролле */
+  z-index: 1; /* Чтобы был поверх контента */
+}
+
+.users-table tbody tr:nth-child(even) {
+  background-color: var(--table-row-even-bg, transparent); /* Фон четных строк */
+}
+
+.users-table tbody tr:hover {
+  background-color: var(--table-row-hover-bg, var(--bg-hover)); /* Фон при наведении */
+}
+
+/* --- Стили для элементов формы в таблице --- */
+.users-table select,
+.users-table input[type="checkbox"] {
+  padding: 8px 10px; /* Увеличим паддинг */
+  border: 1px solid var(--input-border-color, var(--border-color));
+  border-radius: var(--border-radius-sm);
+  background-color: var(--input-bg-color, var(--bg-primary)); /* Фон инпутов */
+  color: var(--input-text-color, var(--text-color));
+  min-width: 180px; /* Увеличим мин. ширину */
+  font-size: 0.95em;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.users-table select:focus,
+.users-table input[type="checkbox"]:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 20%, transparent); /* Тень при фокусе */
+    outline: none;
+}
+
+
+.users-table input[type="checkbox"] {
+  min-width: auto;
+  cursor: pointer;
+  margin: 0 5px;
+  transform: scale(1.1); /* Немного увеличим чекбокс */
+}
+
+/* --- Стили для кнопок действий --- */
+.users-table td:last-child { /* Колонка с действиями */
+   white-space: nowrap; /* Предотвращаем перенос кнопок */
+}
+
+.users-table button {
+  padding: 8px 15px; /* Увеличим паддинг */
+  border: none;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-weight: 500; /* Средняя жирность */
+  margin-right: 8px;
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  font-size: 0.9em;
+}
+
+.users-table button:last-child {
+  margin-right: 0;
+}
+
+.edit-btn {
+  background-color: var(--button-edit-bg, var(--accent-color));
+  color: var(--button-edit-color, #fff);
+  box-shadow: var(--shadow-xs);
+}
+
+.edit-btn:hover {
+  background-color: var(--button-edit-hover-bg, var(--accent-hover));
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.save-btn {
+  background-color: var(--button-save-bg, var(--success-color));
+  color: var(--button-save-color, #fff);
+   box-shadow: var(--shadow-xs);
+}
+
+.save-btn:hover {
+  background-color: var(--button-save-hover-bg, color-mix(in srgb, var(--success-color) 85%, black));
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.cancel-btn {
+  background-color: var(--button-cancel-bg, var(--bg-tertiary));
+  color: var(--button-cancel-color, var(--text-secondary));
+  border: 1px solid var(--border-color); /* Добавим рамку для отличия */
+   box-shadow: var(--shadow-xs);
+}
+
+.cancel-btn:hover {
+  background-color: var(--button-cancel-hover-bg, var(--bg-hover));
+  border-color: color-mix(in srgb, var(--text-secondary) 80%, transparent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Сообщение об ошибке --- */
+.error-message {
+  color: var(--danger-color);
+  background-color: color-mix(in srgb, var(--danger-color) 15%, var(--bg-secondary));
+  padding: 15px;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger-color) 40%, var(--bg-secondary));
+  margin-top: 20px;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+
+/* --- Адаптивность (базовая) --- */
+/* На очень маленьких экранах можно добавить больше стилей для адаптации таблицы,
+   например, отображение ячеек блоками или скрытие некоторых колонок.
+   Пока что добавлен только горизонтальный скролл для .user-management-page */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

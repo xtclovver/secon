@@ -1032,3 +1032,86 @@ func (h *AppHandler) GetVacationConflicts(c *gin.Context) {
 	// Возвращаем список конфликтов (может быть пустым)
 	c.JSON(http.StatusOK, conflicts)
 }
+
+// --- Admin User Management Handlers ---
+
+// GetAllUsersHandler обработчик для получения списка всех пользователей (Admin only)
+func (h *AppHandler) GetAllUsersHandler(c *gin.Context) {
+	// Проверяем права администратора
+	isAdminVal, exists := c.Get("isAdmin")
+	if !exists || !isAdminVal.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права администратора"})
+		return
+	}
+
+	// Вызываем сервис для получения всех пользователей
+	users, err := h.userService.GetAllUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения списка пользователей: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}
+
+// UpdateUserAdminHandler обработчик для обновления данных пользователя администратором (Admin only)
+func (h *AppHandler) UpdateUserAdminHandler(c *gin.Context) {
+	// Проверяем права администратора
+	isAdminVal, exists := c.Get("isAdmin")
+	if !exists || !isAdminVal.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права администратора"})
+		return
+	}
+
+	// Получаем ID целевого пользователя из URL
+	targetUserIDStr := c.Param("id")
+	targetUserID, err := strconv.Atoi(targetUserIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID пользователя"})
+		return
+	}
+
+	// Получаем ID запрашивающего пользователя (админа) из контекста
+	requestingUserIDVal, exists := c.Get("userID")
+	if !exists {
+		// Это не должно произойти, если middleware отработал, но проверим
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Не удалось определить администратора"})
+		return
+	}
+	requestingUserID := requestingUserIDVal.(int)
+
+	// Создаем "фиктивного" пользователя для передачи в сервис
+	requestingUser := &models.User{
+		ID:      requestingUserID,
+		IsAdmin: true, // Мы уже проверили права выше
+	}
+
+	// Привязываем данные из тела запроса к DTO
+	var updateData models.UserUpdateAdminDTO
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные для обновления: " + err.Error()})
+		return
+	}
+
+	// Вызываем сервис для обновления данных пользователя админом
+	err = h.userService.UpdateUserAdmin(requestingUser, targetUserID, &updateData)
+	if err != nil {
+		// Определяем тип ошибки и возвращаем соответствующий статус
+		statusCode := http.StatusInternalServerError
+		errMsg := "Ошибка обновления пользователя: " + err.Error()
+
+		if strings.Contains(err.Error(), "недостаточно прав") { // Хотя проверка уже есть выше
+			statusCode = http.StatusForbidden
+		} else if strings.Contains(err.Error(), "не найден") {
+			statusCode = http.StatusNotFound
+		} else if strings.Contains(err.Error(), "не предоставлены") || strings.Contains(err.Error(), "нет полей") {
+			statusCode = http.StatusBadRequest
+		}
+		// TODO: Добавить обработку ошибок валидации ID юнита/должности, если сервис их возвращает
+
+		c.JSON(statusCode, gin.H{"error": errMsg})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Данные пользователя успешно обновлены администратором"})
+}
