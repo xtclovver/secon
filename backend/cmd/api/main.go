@@ -109,7 +109,8 @@ func main() {
 		{
 			// Маршруты для управления лимитами отпусков
 			admin.POST("/vacation-limits", appHandler.SetVacationLimit)
-			admin.GET("/users", appHandler.GetAllUsersWithLimits) // Получение пользователей с лимитами
+			// Переименован маршрут для избежания конфликта с GET /api/admin/users
+			admin.GET("/users-with-limits", appHandler.GetAllUsersWithLimits) // GET /api/admin/users-with-limits?year=...
 
 			// Маршруты для управления организационной структурой
 			units := admin.Group("/units")
@@ -122,9 +123,16 @@ func main() {
 				// Новый маршрут для получения пользователей юнита с лимитами (Используем :id вместо :unitId)
 				units.GET("/:id/users-with-limits", appHandler.GetUnitUsersWithLimitsHandler) // GET /api/admin/units/{id}/users-with-limits?year=...
 			}
-			// Новый маршрут для обновления лимита конкретного пользователя
-			admin.PUT("/users/:userId/vacation-limit", appHandler.UpdateUserVacationLimitHandler) // PUT /api/admin/users/{userId}/vacation-limit
-			// TODO: Добавить другие админские маршруты (управление пользователями и т.д.)
+
+			// Маршруты для управления пользователями (Admin only)
+			adminUsers := admin.Group("/users")
+			{
+				adminUsers.GET("", appHandler.GetAllUsersHandler)         // GET /api/admin/users - Получить всех пользователей
+				adminUsers.PUT("/:id", appHandler.UpdateUserAdminHandler) // PUT /api/admin/users/{id} - Обновить пользователя админом
+				// Маршрут обновления лимита перенесен сюда и использует :id
+				adminUsers.PUT("/:id/vacation-limit", appHandler.UpdateUserVacationLimitHandler) // PUT /api/admin/users/{id}/vacation-limit
+				// TODO: Добавить маршруты для создания/удаления пользователей админом, если нужно
+			}
 		}
 
 		// Маршрут для обновления профиля пользователя (доступен всем аутентифицированным, права проверяются в обработчике)

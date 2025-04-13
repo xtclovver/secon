@@ -91,6 +91,51 @@ export const getMyProfile = async () => {
   }
 };
 
+/**
+ * Получает список всех пользователей (для админ-панели).
+ * Требует прав администратора.
+ * @returns {Promise<Array<object>>} - Промис, который разрешается массивом UserProfileDTO.
+ */
+export const getAllUsersAdmin = async () => {
+  try {
+    const response = await apiClient.get('/admin/users'); // Вызываем новый эндпоинт GET /api/admin/users
+    return response.data;
+  } catch (error) {
+    console.error('Ошибка при получении списка всех пользователей (админ):', error.response || error.message);
+    throw new Error(error.response?.data?.error || 'Не удалось получить список пользователей');
+  }
+};
+
+/**
+ * Обновляет данные пользователя от имени администратора.
+ * Требует прав администратора.
+ * @param {number} userId - ID пользователя для обновления.
+ * @param {object} updateData - Объект с полями для обновления (position_id, organizational_unit_id, is_admin, is_manager).
+ * @returns {Promise<object>} - Промис, который разрешается объектом с сообщением об успехе.
+ */
+export const updateUserAdmin = async (userId, updateData) => {
+  try {
+    // Удаляем null/undefined значения, но оставляем false для is_admin/is_manager
+    const filteredData = Object.entries(updateData).reduce((acc, [key, value]) => {
+      if (value !== null && value !== undefined) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+
+    if (Object.keys(filteredData).length === 0) {
+      console.log("Нет данных для обновления пользователя (админ).");
+      return { message: "Нет данных для обновления." };
+    }
+
+    const response = await apiClient.put(`/admin/users/${userId}`, filteredData); // Вызываем новый эндпоинт PUT /api/admin/users/{id}
+    return response.data;
+  } catch (error) {
+    console.error(`Ошибка при обновлении пользователя ${userId} (админ):`, error.response || error.message);
+    throw new Error(error.response?.data?.error || 'Не удалось обновить данные пользователя');
+  }
+};
+
 
 // Можно добавить другие функции для работы с пользователями (CRUD и т.д.)
 // export const createUser = async (userData) => { ... };

@@ -37,7 +37,8 @@ const VacationForm = lazy(() => import('./pages/vacations/VacationForm'));
 const VacationsList = lazy(() => import('./pages/vacations/VacationsList')); // Будет создан позже
 const VacationCalendar = lazy(() => import('./pages/vacations/VacationCalendar')); // Будет создан позже
 const UserProfilePage = lazy(() => import('./pages/profile/UserProfilePage'));
-const DepartmentManagementPage = lazy(() => import('./pages/admin/DepartmentManagementPage')); // Добавляем новую страницу
+const DepartmentManagementPage = lazy(() => import('./pages/admin/DepartmentManagementPage'));
+const UserManagementPage = lazy(() => import('./pages/admin/UserManagementPage')); // <-- Добавляем импорт новой страницы
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 // Компонент-обертка для основного макета приложения
@@ -289,7 +290,14 @@ const App = () => {
                           <Route
                             path="/admin/units"
                             element={
-                              user?.isAdmin ? <DepartmentManagementPage /> : <Navigate to="/dashboard" replace />
+                               user?.isAdmin ? <DepartmentManagementPage /> : <Navigate to="/dashboard" replace />
+                            }
+                          />
+                          {/* Новый маршрут для управления пользователями (только админ) */}
+                          <Route
+                            path="/admin/users"
+                            element={
+                              user?.isAdmin ? <UserManagementPage /> : <Navigate to="/dashboard" replace />
                             }
                           />
                        </Route> {/* Конец MainLayout */}

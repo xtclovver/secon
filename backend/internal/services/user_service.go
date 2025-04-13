@@ -14,7 +14,9 @@ type UserServiceInterface interface {
 	GetAllPositions() ([]models.Position, error)                    // Добавлен метод для получения должностей
 	// UpdateUserProfile обновляет профиль пользователя с проверкой прав доступа
 	UpdateUserProfile(requestingUser *models.User, targetUserID int, updateData *models.UserUpdateDTO) error
-	GetUserProfile(userID int) (*models.UserProfileDTO, error) // Новый метод для получения профиля
+	GetUserProfile(userID int) (*models.UserProfileDTO, error)                                                  // Новый метод для получения профиля
+	GetAllUsers() ([]models.UserProfileDTO, error)                                                              // Новый метод для получения всех пользователей (админ)
+	UpdateUserAdmin(requestingUser *models.User, targetUserID int, updateData *models.UserUpdateAdminDTO) error // Новый метод для обновления админом
 	// TODO: Добавить другие методы сервиса пользователей по мере необходимости (GetUserByID и т.д.)
 }
 
@@ -131,6 +133,44 @@ func (s *UserService) GetUserProfile(userID int) (*models.UserProfileDTO, error)
 	}
 	// Дополнительная бизнес-логика, если нужна
 	return profile, nil
+}
+
+// GetAllUsers получает список всех пользователей для админ-панели
+func (s *UserService) GetAllUsers() ([]models.UserProfileDTO, error) {
+	users, err := s.userRepo.GetAllUsers()
+	if err != nil {
+		// Логирование ошибки может быть полезно
+		return nil, fmt.Errorf("ошибка получения всех пользователей из репозитория: %w", err)
+	}
+	// Дополнительная бизнес-логика (фильтрация, обогащение данных) может быть добавлена здесь
+	return users, nil
+}
+
+// UpdateUserAdmin обновляет данные пользователя от имени администратора
+func (s *UserService) UpdateUserAdmin(requestingUser *models.User, targetUserID int, updateData *models.UserUpdateAdminDTO) error {
+	if requestingUser == nil {
+		return fmt.Errorf("не удалось определить запрашивающего пользователя")
+	}
+	if !requestingUser.IsAdmin {
+		return fmt.Errorf("недостаточно прав для выполнения этой операции") // Только админ может использовать этот метод
+	}
+	if updateData == nil {
+		return fmt.Errorf("данные для обновления не предоставлены")
+	}
+
+	// Проверяем, есть ли что обновлять
+	if updateData.PositionID == nil && updateData.OrganizationalUnitID == nil && updateData.IsAdmin == nil && updateData.IsManager == nil {
+		return fmt.Errorf("нет полей для обновления")
+	}
+
+	// Вызов репозитория для обновления
+	err := s.userRepo.UpdateUserAdmin(targetUserID, updateData)
+	if err != nil {
+		// Логирование ошибки
+		return fmt.Errorf("ошибка обновления пользователя (админ) в репозитории: %w", err)
+	}
+
+	return nil
 }
 
 // TODO: Реализовать другие методы бизнес-логики для пользователей
