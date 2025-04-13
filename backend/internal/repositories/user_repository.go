@@ -18,6 +18,7 @@ type UserRepositoryInterface interface {
 	GetUsersByOrganizationalUnit(unitID int) ([]models.User, error) // Изменено GetUsersByDepartment
 	CreateUser(user *models.User) error
 	UpdateUser(userID int, updateData *models.UserUpdateDTO) error
+	GetUsersByUnitIDs(unitIDs []int) ([]models.User, error) // Добавлен метод для получения пользователей по списку ID юнитов
 	GetAllUsersWithLimits(year int) ([]models.UserWithLimitDTO, error)
 	GetAllPositions() ([]models.Position, error)                                                         // Восстановлен метод для получения всех должностей
 	GetUserProfileByID(userID int) (*models.UserProfileDTO, error)                                       // Новый метод для профиля
@@ -635,6 +636,85 @@ func (r *UserRepository) GetUsersWithLimitsByOrganizationalUnit(unitID int, year
 	}
 
 	return usersWithLimits, nil
+}
+
+// GetUsersByUnitIDs получает список пользователей для заданного списка ID организационных юнитов
+func (r *UserRepository) GetUsersByUnitIDs(unitIDs []int) ([]models.User, error) {
+	if len(unitIDs) == 0 {
+		return []models.User{}, nil // Возвращаем пустой срез, если ID юнитов не переданы
+	}
+
+	// Генерируем плейсхолдеры (?, ?, ...) для IN клаузы
+	placeholders := sqlRepeatParams(len(unitIDs))
+	query := fmt.Sprintf(`
+		SELECT
+			u.id, u.login, u.full_name, u.organizational_unit_id, u.position_id,
+			p.name AS position_name, u.is_admin, u.is_manager
+		FROM users u
+		LEFT JOIN positions p ON u.position_id = p.id
+		WHERE u.organizational_unit_id IN (?%s)
+		ORDER BY u.full_name ASC`, placeholders) // Добавлен LEFT JOIN для должности и сортировка
+
+	// Создаем срез аргументов []interface{} для передачи в Query
+	args := make([]interface{}, len(unitIDs))
+	for i, id := range unitIDs {
+		args[i] = id
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса пользователей по списку ID юнитов: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var user models.User
+		var organizationalUnitID sql.NullInt64
+		var positionID sql.NullInt64
+		var positionName sql.NullString
+
+		// Сканируем данные пользователя
+		if err := rows.Scan(
+			&user.ID, &user.Login, &user.FullName, &organizationalUnitID, &positionID,
+			&positionName, &user.IsAdmin, &user.IsManager,
+		); err != nil {
+			// log.Printf("Ошибка сканирования пользователя при запросе по списку юнитов: %v", err)
+			continue // Пропускаем пользователя с ошибкой
+		}
+
+		// Устанавливаем ID юнита
+		if organizationalUnitID.Valid {
+			unitID := int(organizationalUnitID.Int64)
+			user.OrganizationalUnitID = &unitID
+		} else {
+			user.OrganizationalUnitID = nil
+		}
+
+		// Устанавливаем ID должности
+		if positionID.Valid {
+			posID := int(positionID.Int64)
+			user.PositionID = &posID
+		} else {
+			user.PositionID = nil
+		}
+
+		// Устанавливаем название должности
+		if positionName.Valid {
+			name := positionName.String
+			user.PositionName = &name
+		} else {
+			user.PositionName = nil
+		}
+
+		users = append(users, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации по пользователям для списка юнитов: %w", err)
+	}
+
+	return users, nil
 }
 
 // TODO: Добавить репозиторий и методы для работы с organizational_units (CRUD, получение дерева)

@@ -151,12 +151,24 @@
   background-color: var(--bg-tertiary);
 }
 
-/* Стили для дней с отпусками */
+/* Стили для дней с отпусками (без конфликтов) */
 .department-wide-calendar .department-vacation-date {
-  background-color: rgba(var(--info-rgb, 13, 202, 240), 0.15) !important; /* Легкий фон - используем переменную, если есть, иначе fallback */
-  border: 1px dashed rgba(var(--info-rgb, 13, 202, 240), 0.3); /* Пунктирная рамка */
+  background-color: lime !important; /* Ярко-зеленый + !important */
+  border: 1px dashed rgba(0, 255, 0, 0.5); /* Зеленая пунктирная рамка */
 }
-/* Для лучшего контраста info-color, зададим ее в RGB для rgba */
+
+/* Стили для дней с конфликтами (с еще более специфичным селектором, чтобы переопределить .department-vacation-date) */
+.department-wide-calendar .react-calendar__tile.department-vacation-date.conflict-date {
+  background-color: aqua !important; /* Ярко-голубой (синий) + !important */
+  border: 1px solid rgba(0, 255, 255, 0.9); /* Сплошная рамка для конфликта */
+}
+/* Дополнительное правило на случай, если нет класса отпуска */
+.department-wide-calendar .react-calendar__tile.conflict-date {
+    background-color: aqua !important; /* Ярко-голубой (синий) + !important */
+    border: 1px solid rgba(0, 255, 255, 0.9); /* Сплошная рамка для конфликта */
+}
+
+/* Для лучшего контраста info-color, зададим ее в RGB для rgba - МОЖНО УДАЛИТЬ, если не используется в других местах */
 :root { --info-rgb: 13, 202, 240; }
 [data-theme="dark"] { --info-rgb: 52, 211, 235; }
 
@@ -208,7 +220,19 @@
   height: 15px;
   margin-right: 5px;
   border-radius: 3px;
-  /* Используем тот же цвет фона, что и для дней отпуска */
-  background-color: rgba(var(--info-rgb, 13, 202, 240), 0.3);
-  border: 1px solid rgba(var(--info-rgb, 13, 202, 240), 0.5);
+  border: 1px solid var(--border-color); /* Общая рамка */
+}
+
+/* Специфичные цвета для квадратов легенды */
+.calendar-legend .legend-color-box.department-vacation-date {
+  background-color: lime; /* Ярко-зеленый */
+}
+
+/* Специфичные цвета для квадратов легенды (оставляем без !important) */
+.calendar-legend .legend-color-box.department-vacation-date {
+  background-color: lime; /* Ярко-зеленый */
+}
+
+.calendar-legend .legend-color-box.conflict-date {
+  background-color: aqua; /* Ярко-голубой (синий) */
 }

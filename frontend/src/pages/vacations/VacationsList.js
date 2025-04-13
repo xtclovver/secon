@@ -205,12 +205,55 @@ const VacationsList = () => {
       }
   };
 
-  // Обработчик утверждения (вызывает handleAction)
-  // В handleApprove передаем флаг isApproveAction = true
-  const handleApprove = (id) => {
-    if (window.confirm('Вы уверены, что хотите утвердить эту заявку?')) {
-        // Передаем approveVacationRequest и флаг isApproveAction
-        handleAction(approveVacationRequest, id, 'Заявка успешно утверждена', 'Ошибка утверждения', true);
+  // Обработчик утверждения с проверкой конфликтов
+  const handleApprove = async (id) => {
+    setLoading(true); // Устанавливаем loading в начале
+    try {
+      // 1. Первая попытка утверждения без force
+      const response = await approveVacationRequest(id, false);
+      // Если дошли сюда без ошибки 409, значит конфликтов не было
+      toast.success(response.message || 'Заявка успешно утверждена');
+      await fetchVacations(year, statusFilter); // Обновляем список
+      if (refreshUserVacationLimits) {
+        await refreshUserVacationLimits(year); // Обновляем лимиты
+      }
+    } catch (error) {
+      if (error.isConflict) {
+        // 2. Обработка ошибки конфликта (409)
+        console.warn("Approval conflict detected:", error.conflicts);
+        // Формируем сообщение для пользователя
+        const conflictMessages = error.conflicts.map((c, index) => (
+          `  ${index + 1}. ${c.conflictingUserFullName} (${formatDate(c.overlapStartDate)} - ${formatDate(c.overlapEndDate)})`
+        )).join('\n');
+        const confirmationMessage = `Внимание! Обнаружены конфликты отпусков с:\n${conflictMessages}\n\nВсе равно утвердить заявку?`;
+
+        // 3. Запрашиваем подтверждение у пользователя
+        if (window.confirm(confirmationMessage)) {
+          // 4. Повторная попытка с force=true
+          try {
+            const forceResponse = await approveVacationRequest(id, true);
+            toast.success(forceResponse.message || 'Заявка принудительно утверждена');
+             // Обновляем список заявок И лимиты пользователя
+            await fetchVacations(year, statusFilter);
+            if (refreshUserVacationLimits) {
+                await refreshUserVacationLimits(year);
+            }
+          } catch (forceError) {
+            // Ошибка при принудительном утверждении
+            const errMsg = forceError.response?.data?.error || forceError.message || 'Не удалось принудительно утвердить заявку.';
+            toast.error(`Ошибка принудительного утверждения: ${errMsg}`);
+          }
+        } else {
+          // Пользователь отменил утверждение
+          toast.info('Утверждение заявки отменено из-за конфликтов.');
+        }
+      } else {
+        // 5. Обработка других ошибок
+        const errMsg = error.response?.data?.error || error.message || 'Не удалось утвердить заявку.';
+        toast.error(`Ошибка утверждения: ${errMsg}`);
+      }
+    } finally {
+      setLoading(false); // Сбрасываем loading в конце
     }
   };
 

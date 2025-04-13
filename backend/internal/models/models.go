@@ -255,16 +255,31 @@ type UserWithLimitAdminDTO struct {
 
 // ConflictingPeriod - Структура для описания конфликта отпусков
 type ConflictingPeriod struct {
-	ConflictingUserID       int        `json:"conflicting_user_id"`
-	ConflictingUserFullName string     `json:"conflicting_user_full_name"`
-	ConflictingRequestID    int        `json:"conflicting_request_id"` // ID заявки конфликтующего пользователя
-	ConflictingPeriodID     int        `json:"conflicting_period_id"`  // ID периода конфликтующего пользователя
-	ConflictingStartDate    CustomDate `json:"conflicting_start_date"`
-	ConflictingEndDate      CustomDate `json:"conflicting_end_date"`
-	OriginalRequestID       int        `json:"original_request_id"` // ID утверждаемой заявки
-	OriginalPeriodID        int        `json:"original_period_id"`  // ID периода утверждаемой заявки
-	OriginalStartDate       CustomDate `json:"original_start_date"`
-	OriginalEndDate         CustomDate `json:"original_end_date"`
-	OverlapStartDate        CustomDate `json:"overlap_start_date"` // Начало пересечения
-	OverlapEndDate          CustomDate `json:"overlap_end_date"`   // Конец пересечения
+	ConflictingUserID       int        `json:"conflicting_user_id"`        // ID второго пользователя в конфликте
+	ConflictingUserFullName string     `json:"conflicting_user_full_name"` // ФИО второго пользователя
+	ConflictingRequestID    int        `json:"conflicting_request_id"`     // ID заявки второго пользователя
+	ConflictingPeriodID     int        `json:"conflicting_period_id"`      // ID периода второго пользователя
+	ConflictingStartDate    CustomDate `json:"conflicting_start_date"`     // Начало периода второго пользователя
+	ConflictingEndDate      CustomDate `json:"conflicting_end_date"`       // Конец периода второго пользователя
+	OriginalUserID          int        `json:"original_user_id"`           // ID первого пользователя в конфликте
+	OriginalUserFullName    string     `json:"original_user_full_name"`    // ФИО первого пользователя
+	OriginalRequestID       int        `json:"original_request_id"`        // ID заявки первого пользователя
+	OriginalPeriodID        int        `json:"original_period_id"`         // ID периода первого пользователя
+	OriginalStartDate       CustomDate `json:"original_start_date"`        // Начало периода первого пользователя
+	OriginalEndDate         CustomDate `json:"original_end_date"`          // Конец периода первого пользователя
+	OverlapStartDate        CustomDate `json:"overlap_start_date"`         // Начало пересечения
+	OverlapEndDate          CustomDate `json:"overlap_end_date"`           // Конец пересечения
+}
+
+// --- Dashboard DTOs ---
+
+// ManagerDashboardData - DTO для дашборда руководителя
+type ManagerDashboardData struct {
+	PendingRequestsCount  int                 `json:"pending_requests_count"`   // Количество заявок "На рассмотрении"
+	ApprovedDaysCountYear int                 `json:"approved_days_count_year"` // Сумма дней в утвержденных заявках за год (или выбранный период)
+	RejectedDaysCountYear int                 `json:"rejected_days_count_year"` // Сумма дней в отклоненных заявках за год (или выбранный период)
+	PendingDaysCountYear  int                 `json:"pending_days_count_year"`  // Сумма дней в заявках "На рассмотрении" за год (или выбранный период)
+	UpcomingConflicts     []ConflictingPeriod `json:"upcoming_conflicts"`       // Список ближайших конфликтов (пересечений утвержденных отпусков)
+	SubordinateUserCount  int                 `json:"subordinate_user_count"`   // Общее количество подчиненных пользователей
+	// Можно добавить другие счетчики при необходимости
 }

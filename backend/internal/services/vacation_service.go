@@ -23,13 +23,18 @@ type VacationServiceInterface interface {
 	GetOrganizationalUnitVacations(unitID int, year int, statusFilter *int) ([]models.VacationRequest, error)                                                      // GetDepartmentVacations -> GetOrganizationalUnitVacations, departmentID -> unitID
 	GetAllUserVacations(requestingUserID int, yearFilter *int, statusFilter *int, userIDFilter *int, unitIDFilter *int) ([]models.VacationRequestAdminView, error) // departmentIDFilter -> unitIDFilter
 	CancelVacationRequest(requestID int, cancellingUserID int) error
-	// Изменена сигнатура: возвращает список конфликтов и ошибку
-	ApproveVacationRequest(requestID int, approverID int) ([]models.ConflictingPeriod, error)
+	// Изменена сигнатура: добавлен флаг force, возвращает список конфликтов и ошибку
+	ApproveVacationRequest(requestID int, approverID int, force bool) ([]models.ConflictingPeriod, error)
 	RejectVacationRequest(requestID int, rejecterID int, reason string) error
+	// Добавлен метод для дашборда
+	GetManagerDashboardData(managerID int) (*models.ManagerDashboardData, error)
+	// Добавлен метод для получения конфликтов для календаря/списка
+	GetVacationConflicts(requestingUserID int, startDate time.Time, endDate time.Time) ([]models.ConflictingPeriod, error)
 }
 
 // VacationRepositoryInterface определяет методы для работы с данными отпусков.
 // Перемещено из vacation_repository.go для корректной компиляции сервиса
+// ВАЖНО: Это определение должно быть синхронизировано с тем, что в vacation_repository.go
 type VacationRepositoryInterface interface {
 	// --- Лимиты ---
 	GetVacationLimit(userID int, year int) (*models.VacationLimit, error)
@@ -51,17 +56,21 @@ type VacationRepositoryInterface interface {
 	// --- Проверка конфликтов ---
 	GetUserPositionByID(userID int) (*int, error)                                                                                                         // Добавлен метод получения должности
 	GetApprovedVacationConflictsByPosition(positionID int, excludeUserID int, periodsToCheck []models.VacationPeriod) ([]models.ConflictingPeriod, error) // Добавлен метод поиска конфликтов
+	// --- Dashboard Data ---
+	CountPendingRequestsByUnitIDs(unitIDs []int) (int, error)                                                                        // Добавлен метод подсчета ожидающих заявок
+	SumRequestedDaysByStatusAndUnitIDs(unitIDs []int, statusIDs []int, year int) (int, error)                                        // Добавлен метод суммирования дней
+	GetUpcomingApprovedConflictsByUnitIDs(unitIDs []int, startDate time.Time, endDate time.Time) ([]models.ConflictingPeriod, error) // Добавлен метод получения предстоящих конфликтов
 }
 
 // VacationService реализует VacationServiceInterface
 type VacationService struct {
 	vacationRepo VacationRepositoryInterface                        // Используем интерфейс репозитория отпусков
 	userRepo     repositories.UserRepositoryInterface               // Используем интерфейс репозитория пользователей
-	unitRepo     repositories.OrganizationalUnitRepositoryInterface // Добавляем интерфейс репозитория юнитов
+	unitRepo     repositories.OrganizationalUnitRepositoryInterface // Используем полный интерфейс из repositories
 }
 
 // Обновляем конструктор, чтобы принимать интерфейсы
-func NewVacationService(vacationRepo VacationRepositoryInterface, userRepo repositories.UserRepositoryInterface, unitRepo repositories.OrganizationalUnitRepositoryInterface) *VacationService { // Добавлен unitRepo
+func NewVacationService(vacationRepo VacationRepositoryInterface, userRepo repositories.UserRepositoryInterface, unitRepo repositories.OrganizationalUnitRepositoryInterface) *VacationService { // Используем полный интерфейс
 	return &VacationService{
 		vacationRepo: vacationRepo,
 		userRepo:     userRepo,
@@ -504,8 +513,10 @@ func (s *VacationService) CancelVacationRequest(requestID int, cancellingUserID 
 	return nil
 }
 
-// ApproveVacationRequest утверждает заявку и возвращает список конфликтов (предупреждений)
-func (s *VacationService) ApproveVacationRequest(requestID int, approverID int) ([]models.ConflictingPeriod, error) {
+// ApproveVacationRequest утверждает заявку.
+// Если найдены конфликты и force=false, возвращает конфликты без утверждения.
+// Если конфликтов нет или force=true, утверждает заявку и возвращает конфликты (если были).
+func (s *VacationService) ApproveVacationRequest(requestID int, approverID int, force bool) ([]models.ConflictingPeriod, error) {
 	req, err := s.vacationRepo.GetVacationRequestByID(requestID)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка получения заявки ID %d для утверждения: %w", requestID, err)
@@ -569,16 +580,26 @@ func (s *VacationService) ApproveVacationRequest(requestID int, approverID int) 
 			// Можно вернуть ошибку, если считаем это критичным:
 			// return nil, fmt.Errorf("ошибка проверки конфликтов отпусков: %w", err)
 		} else if len(conflicts) > 0 {
-			log.Printf("[ApproveVacationRequest] Found %d conflicts for request %d", len(conflicts), requestID)
+			log.Printf("[ApproveVacationRequest] Found %d conflicts for request %d (user %d, position %d)", len(conflicts), requestID, req.UserID, *positionID)
 		}
 	} else {
 		log.Printf("[ApproveVacationRequest] Skipping conflict check for request %d as user %d has no position assigned.", requestID, req.UserID)
 	}
 
+	// --- Проверка, нужно ли прервать из-за конфликтов ---
+	if len(conflicts) > 0 && !force {
+		log.Printf("[ApproveVacationRequest] Conflicts found for request %d and force=false. Returning conflicts without approving.", requestID)
+		// Возвращаем конфликты, но НЕ ошибку. Сигнализируем, что утверждение не выполнено.
+		// Обработчик должен интерпретировать непустой список conflicts при nil ошибке как необходимость подтверждения.
+		return conflicts, nil
+	}
+
 	// --- Утверждение заявки (установка статуса) ---
+	// Выполняется если конфликтов нет ИЛИ force=true
+	log.Printf("[ApproveVacationRequest] Proceeding with approval for request %d (force=%t, conflicts=%d)", requestID, force, len(conflicts))
 	err = s.vacationRepo.UpdateRequestStatusByID(requestID, models.StatusApproved)
 	if err != nil {
-		log.Printf("WARNING: Failed to set status 'Approved' for request %d (user %d, year %d), but days were likely spent on submission: %v\n", requestID, req.UserID, req.Year, err)
+		log.Printf("ERROR: Failed to set status 'Approved' for request %d: %v", requestID, err)
 		// В случае ошибки утверждения, не возвращаем конфликты, а только ошибку
 		return nil, fmt.Errorf("ошибка установки статуса 'Утверждена' для заявки %d: %w", requestID, err)
 	}
@@ -652,6 +673,180 @@ func (s *VacationService) RejectVacationRequest(requestID int, rejecterID int, r
 	// TODO: Save rejection reason
 	// TODO: Notify user
 	return nil
+}
+
+// --- Dashboard Service Method ---
+
+// GetManagerDashboardData собирает данные для дашборда руководителя
+func (s *VacationService) GetManagerDashboardData(managerID int) (*models.ManagerDashboardData, error) {
+	// 1. Получить информацию о руководителе (особенно его юнит)
+	manager, err := s.userRepo.FindByID(managerID)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения данных руководителя ID %d: %w", managerID, err)
+	}
+	if manager == nil || manager.OrganizationalUnitID == nil || !manager.IsManager {
+		// Добавлена проверка на isManager
+		return nil, errors.New("пользователь не является руководителем или не привязан к юниту")
+	}
+
+	// 2. Получить ID всех подчиненных юнитов (включая свой)
+	subtreeIDs, err := s.unitRepo.GetSubtreeIDs(*manager.OrganizationalUnitID)
+	if err != nil {
+		log.Printf("[GetManagerDashboardData] Error getting subtree for manager %d (unit %d): %v", managerID, *manager.OrganizationalUnitID, err)
+		return nil, fmt.Errorf("ошибка получения подчиненных юнитов для дашборда: %w", err)
+	}
+	if len(subtreeIDs) == 0 { // Если что-то пошло не так и нет даже своего ID
+		subtreeIDs = append(subtreeIDs, *manager.OrganizationalUnitID) // Добавляем хотя бы свой юнит
+		log.Printf("[GetManagerDashboardData] Warning: Subtree for manager %d (unit %d) was empty, using only manager's unit.", managerID, *manager.OrganizationalUnitID)
+	}
+
+	dashboardData := &models.ManagerDashboardData{}
+	var errorsOccurred []string      // Срез для сбора некритичных ошибок
+	currentYear := time.Now().Year() // Используем текущий год для подсчета дней
+
+	// 3. Получить количество ожидающих заявок
+	pendingCount, err := s.vacationRepo.CountPendingRequestsByUnitIDs(subtreeIDs)
+	if err != nil {
+		log.Printf("[GetManagerDashboardData] Error counting pending requests for manager %d (units %v): %v", managerID, subtreeIDs, err)
+		errorsOccurred = append(errorsOccurred, fmt.Sprintf("Ошибка подсчета ожидающих заявок: %v", err))
+		dashboardData.PendingRequestsCount = -1 // Индикатор ошибки
+	} else {
+		dashboardData.PendingRequestsCount = pendingCount
+	}
+
+	// 4. Получить количество подчиненных пользователей
+	userCount := 0
+	users, err := s.userRepo.GetUsersByUnitIDs(subtreeIDs)
+	if err != nil {
+		log.Printf("[GetManagerDashboardData] Error counting users for manager %d (units %v): %v", managerID, subtreeIDs, err)
+		errorsOccurred = append(errorsOccurred, fmt.Sprintf("Ошибка подсчета пользователей: %v", err))
+		dashboardData.SubordinateUserCount = -1 // Индикатор ошибки
+	} else {
+		userCount = len(users)
+		// Исключаем самого менеджера, если он попал в список
+		for _, u := range users {
+			if u.ID == managerID {
+				userCount--
+				break
+			}
+		}
+		dashboardData.SubordinateUserCount = userCount
+	}
+
+	// 5. Получить сумму дней по статусам за текущий год
+	approvedDays, err := s.vacationRepo.SumRequestedDaysByStatusAndUnitIDs(subtreeIDs, []int{models.StatusApproved}, currentYear)
+	if err != nil {
+		log.Printf("[GetManagerDashboardData] Error summing approved days for manager %d (units %v, year %d): %v", managerID, subtreeIDs, currentYear, err)
+		errorsOccurred = append(errorsOccurred, fmt.Sprintf("Ошибка подсчета утвержденных дней: %v", err))
+		dashboardData.ApprovedDaysCountYear = -1
+	} else {
+		dashboardData.ApprovedDaysCountYear = approvedDays
+	}
+
+	rejectedDays, err := s.vacationRepo.SumRequestedDaysByStatusAndUnitIDs(subtreeIDs, []int{models.StatusRejected}, currentYear)
+	if err != nil {
+		log.Printf("[GetManagerDashboardData] Error summing rejected days for manager %d (units %v, year %d): %v", managerID, subtreeIDs, currentYear, err)
+		errorsOccurred = append(errorsOccurred, fmt.Sprintf("Ошибка подсчета отклоненных дней: %v", err))
+		dashboardData.RejectedDaysCountYear = -1
+	} else {
+		dashboardData.RejectedDaysCountYear = rejectedDays
+	}
+
+	pendingDays, err := s.vacationRepo.SumRequestedDaysByStatusAndUnitIDs(subtreeIDs, []int{models.StatusPending}, currentYear)
+	if err != nil {
+		log.Printf("[GetManagerDashboardData] Error summing pending days for manager %d (units %v, year %d): %v", managerID, subtreeIDs, currentYear, err)
+		errorsOccurred = append(errorsOccurred, fmt.Sprintf("Ошибка подсчета дней 'На рассмотрении': %v", err))
+		dashboardData.PendingDaysCountYear = -1
+	} else {
+		dashboardData.PendingDaysCountYear = pendingDays
+	}
+
+	// 6. Получить ближайшие конфликты (например, на следующие 30 дней)
+	startDate := time.Now()
+	endDate := startDate.AddDate(0, 1, 0) // +1 месяц
+	conflicts, err := s.vacationRepo.GetUpcomingApprovedConflictsByUnitIDs(subtreeIDs, startDate, endDate)
+	if err != nil {
+		log.Printf("[GetManagerDashboardData] Error getting upcoming conflicts for manager %d (units %v): %v", managerID, subtreeIDs, err)
+		errorsOccurred = append(errorsOccurred, fmt.Sprintf("Ошибка получения конфликтов: %v", err))
+		// Оставляем conflicts пустым срезом в случае ошибки
+	} else {
+		dashboardData.UpcomingConflicts = conflicts
+	}
+
+	// Возвращаем данные дашборда. Если были некритичные ошибки, они залогированы.
+	if len(errorsOccurred) > 0 {
+		log.Printf("[GetManagerDashboardData] Finished for manager %d with %d non-critical errors.", managerID, len(errorsOccurred))
+	}
+
+	return dashboardData, nil
+}
+
+// GetVacationConflicts получает список утвержденных конфликтов (одна должность)
+// в заданном диапазоне дат для юнитов, видимых запрашивающему пользователю.
+func (s *VacationService) GetVacationConflicts(requestingUserID int, startDate time.Time, endDate time.Time) ([]models.ConflictingPeriod, error) {
+	// 1. Получить информацию о запрашивающем пользователе
+	requestingUser, err := s.userRepo.FindByID(requestingUserID)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения данных запрашивающего пользователя ID %d: %w", requestingUserID, err)
+	}
+	if requestingUser == nil {
+		return nil, errors.New("запрашивающий пользователь не найден")
+	}
+
+	// 2. Определить список ID юнитов для поиска конфликтов
+	var unitIDsToCheck []int
+	if requestingUser.IsAdmin {
+		// Администратор видит конфликты во всех юнитах. Получаем все ID юнитов.
+		allUnits, err := s.unitRepo.GetAll() // Исправлено: GetAllFlat -> GetAll
+		if err != nil {
+			log.Printf("[GetVacationConflicts] Error getting all units for admin %d: %v", requestingUserID, err)
+			return nil, fmt.Errorf("ошибка получения списка всех юнитов для админа: %w", err)
+		}
+		for _, unit := range allUnits {
+			unitIDsToCheck = append(unitIDsToCheck, unit.ID)
+		}
+		log.Printf("[GetVacationConflicts] Admin %d checking conflicts for ALL %d units.", requestingUserID, len(unitIDsToCheck))
+	} else if requestingUser.IsManager {
+		// Руководитель видит конфликты в своем поддереве
+		if requestingUser.OrganizationalUnitID == nil {
+			log.Printf("[GetVacationConflicts] Manager %d has no assigned unit. Returning empty conflicts.", requestingUserID)
+			return []models.ConflictingPeriod{}, nil // Руководитель без юнита не видит конфликтов
+		}
+		subtreeIDs, err := s.unitRepo.GetSubtreeIDs(*requestingUser.OrganizationalUnitID)
+		if err != nil {
+			log.Printf("[GetVacationConflicts] Error getting subtree for manager %d (unit %d): %v", requestingUserID, *requestingUser.OrganizationalUnitID, err)
+			return nil, fmt.Errorf("ошибка получения подчиненных юнитов для проверки конфликтов: %w", err)
+		}
+		unitIDsToCheck = subtreeIDs
+		log.Printf("[GetVacationConflicts] Manager %d checking conflicts for units %v.", requestingUserID, unitIDsToCheck)
+	} else {
+		// Обычный пользователь видит конфликты только в своем юните (если он назначен)
+		if requestingUser.OrganizationalUnitID != nil {
+			unitIDsToCheck = append(unitIDsToCheck, *requestingUser.OrganizationalUnitID)
+			log.Printf("[GetVacationConflicts] User %d checking conflicts for own unit %d.", requestingUserID, *requestingUser.OrganizationalUnitID)
+		} else {
+			log.Printf("[GetVacationConflicts] User %d has no assigned unit. Returning empty conflicts.", requestingUserID)
+			return []models.ConflictingPeriod{}, nil // Пользователь без юнита не видит конфликтов
+		}
+	}
+
+	if len(unitIDsToCheck) == 0 {
+		log.Printf("[GetVacationConflicts] No units to check for user %d. Returning empty conflicts.", requestingUserID)
+		return []models.ConflictingPeriod{}, nil // Если по какой-то причине список юнитов пуст
+	}
+
+	// 3. Вызвать метод репозитория для получения конфликтов
+	conflicts, err := s.vacationRepo.GetUpcomingApprovedConflictsByUnitIDs(unitIDsToCheck, startDate, endDate)
+	if err != nil {
+		log.Printf("[GetVacationConflicts] Error getting conflicts from repo for user %d (units %v): %v", requestingUserID, unitIDsToCheck, err)
+		return nil, fmt.Errorf("ошибка получения конфликтов из репозитория: %w", err)
+	}
+
+	// TODO: Подумать над удалением дубликатов (A+B и B+A) здесь или в репозитории, если требуется.
+	// Пока возвращаем как есть.
+
+	log.Printf("[GetVacationConflicts] Found %d conflicts for user %d (units %v) between %s and %s.", len(conflicts), requestingUserID, unitIDsToCheck, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	return conflicts, nil
 }
 
 // --- Вспомогательные функции ---
