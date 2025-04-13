@@ -370,27 +370,51 @@ func (h *AppHandler) ApproveVacationRequest(c *gin.Context) {
 		return
 	}
 
-	// Вызываем сервис для утверждения заявки
-	err = h.vacationService.ApproveVacationRequest(requestID, approverID.(int))
+	// Получаем необязательный параметр ?force=true из query
+	forceStr := c.Query("force")
+	force := forceStr == "true"
+
+	// Вызываем сервис для утверждения заявки с флагом force, получаем конфликты и ошибку
+	conflicts, err := h.vacationService.ApproveVacationRequest(requestID, approverID.(int), force)
 	if err != nil {
+		// Обработка ошибок, возникших при попытке утверждения (права, статус, ошибка БД и т.д.)
 		statusCode := http.StatusInternalServerError
 		errMsg := "Ошибка утверждения заявки: " + err.Error()
-		if err.Error() == "заявка не найдена" {
+		errStr := err.Error()
+		if strings.Contains(errStr, "не найден") {
 			statusCode = http.StatusNotFound
-		} else if err.Error() == "недостаточно прав для утверждения этой заявки" {
+		} else if strings.Contains(errStr, "не имеет прав") {
 			statusCode = http.StatusForbidden
-		} else if strings.HasPrefix(err.Error(), "можно утвердить только заявку в статусе") || strings.HasPrefix(err.Error(), "недостаточно дней отпуска у сотрудника") {
+		} else if strings.Contains(errStr, "можно утвердить только заявку в статусе") {
 			statusCode = http.StatusBadRequest
-		} else if strings.Contains(err.Error(), "ошибка при списании дней из лимита") {
-			// Ошибка списания дней - критическая, но заявка уже утверждена
-			statusCode = http.StatusConflict // Используем 409 Conflict для индикации частичного успеха с проблемой
-			errMsg = "Заявка утверждена, но не удалось списать дни: " + err.Error()
 		}
 		c.JSON(statusCode, gin.H{"error": errMsg})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Заявка успешно утверждена"})
+	// Проверяем результат:
+	if len(conflicts) > 0 && !force {
+		// Конфликты найдены, и force был false. Заявка НЕ утверждена.
+		// Возвращаем статус 409 Conflict со списком конфликтов.
+		log.Printf("[Handler ApproveVacationRequest] Request %d approval blocked due to conflicts (force=false).", requestID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":     "Обнаружены конфликты с отпусками других сотрудников на той же должности.",
+			"conflicts": conflicts,
+		})
+		return
+	}
+
+	// Если мы здесь, значит:
+	// 1. Конфликтов не было ИЗНАЧАЛЬНО.
+	// 2. Конфликты были, но force был true, и заявка была УТВЕРЖДЕНА (если не было других ошибок).
+	// В обоих случаях возвращаем HTTP 200 OK.
+	log.Printf("[Handler ApproveVacationRequest] Request %d approved successfully (force=%t, conflicts returned: %d).", requestID, force, len(conflicts))
+	response := gin.H{"message": "Заявка успешно утверждена"}
+	if len(conflicts) > 0 && force {
+		// Если force был true и были конфликты, возвращаем их как предупреждение.
+		response["warnings"] = conflicts
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // RejectVacationRequest обработчик для отклонения заявки (менеджер/админ)
@@ -882,4 +906,129 @@ func (h *AppHandler) UpdateUserVacationLimitHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Лимит отпуска пользователя успешно обновлен"})
+}
+
+// --- Dashboard Handler ---
+
+// GetManagerDashboard обработчик для получения данных дашборда руководителя
+func (h *AppHandler) GetManagerDashboard(c *gin.Context) {
+	// Получаем ID руководителя из контекста
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	managerID := userIDVal.(int)
+
+	// Проверяем, является ли пользователь руководителем (дополнительная проверка)
+	isManagerVal, exists := c.Get("isManager")
+	if !exists || !isManagerVal.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права руководителя"})
+		return
+	}
+
+	// Вызываем сервис для получения данных дашборда
+	dashboardData, err := h.vacationService.GetManagerDashboardData(managerID)
+	if err != nil {
+		// Обрабатываем возможные ошибки (например, пользователь не руководитель, ошибка БД)
+		statusCode := http.StatusInternalServerError
+		errMsg := "Ошибка получения данных дашборда: " + err.Error()
+		if err.Error() == "пользователь не является руководителем или не привязан к юниту" {
+			statusCode = http.StatusForbidden
+		} else if strings.Contains(err.Error(), "не найден") {
+			// Если ошибка связана с ненайденным руководителем (хотя middleware должен был это проверить)
+			statusCode = http.StatusNotFound
+		}
+		c.JSON(statusCode, gin.H{"error": errMsg})
+		return
+	}
+
+	// Возвращаем данные дашборда
+	c.JSON(http.StatusOK, dashboardData)
+}
+
+// GetVacationConflicts обработчик для получения конфликтов отпусков
+func (h *AppHandler) GetVacationConflicts(c *gin.Context) {
+	// Получаем ID пользователя из контекста
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+	userID := userIDVal.(int)
+
+	// Получаем startDate и endDate из query параметров
+	// Ожидаемый формат: RFC3339 или YYYY-MM-DD
+	startDateStr := c.Query("startDate")
+	endDateStr := c.Query("endDate")
+
+	var startDate, endDate time.Time
+	var err error
+
+	// Парсим startDate
+	if startDateStr != "" {
+		// Пытаемся парсить как YYYY-MM-DD сначала
+		startDate, err = time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			// Если не получилось, пробуем RFC3339
+			startDate, err = time.Parse(time.RFC3339, startDateStr)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат startDate. Используйте YYYY-MM-DD или RFC3339."})
+				return
+			}
+		}
+		// Устанавливаем время на начало дня для startDate, если парсился только YYYY-MM-DD
+		if len(startDateStr) == 10 { // Формат YYYY-MM-DD
+			startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
+		}
+	} else {
+		// Если startDate не указан, можно использовать текущую дату или вернуть ошибку
+		// startDate = time.Now()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Параметр startDate обязателен"})
+		return
+	}
+
+	// Парсим endDate
+	if endDateStr != "" {
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			endDate, err = time.Parse(time.RFC3339, endDateStr)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат endDate. Используйте YYYY-MM-DD или RFC3339."})
+				return
+			}
+		}
+		// Устанавливаем время на конец дня для endDate, если парсился только YYYY-MM-DD
+		if len(endDateStr) == 10 { // Формат YYYY-MM-DD
+			endDate = time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, endDate.Location())
+		}
+	} else {
+		// Если endDate не указан, можно использовать startDate + N дней или вернуть ошибку
+		// endDate = startDate.AddDate(0, 1, 0) // Например, +1 месяц
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Параметр endDate обязателен"})
+		return
+	}
+
+	// Проверяем, что startDate не позже endDate
+	if startDate.After(endDate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "startDate не может быть позже endDate"})
+		return
+	}
+
+	// Вызываем сервисный метод
+	conflicts, err := h.vacationService.GetVacationConflicts(userID, startDate, endDate)
+	if err != nil {
+		// Обрабатываем ошибки (пользователь не найден, ошибка получения юнитов/конфликтов)
+		statusCode := http.StatusInternalServerError
+		errMsg := "Ошибка получения конфликтов отпусков: " + err.Error()
+		if strings.Contains(err.Error(), "не найден") {
+			statusCode = http.StatusNotFound // Или StatusUnauthorized, если пользователь из токена не найден
+		}
+		// Можно добавить другие проверки ошибок
+		c.JSON(statusCode, gin.H{"error": errMsg})
+		return
+	}
+
+	// Возвращаем список конфликтов (может быть пустым)
+	c.JSON(http.StatusOK, conflicts)
 }

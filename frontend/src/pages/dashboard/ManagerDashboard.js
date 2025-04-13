@@ -2,119 +2,152 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import Calendar from 'react-calendar';
-import { FaExclamationTriangle, FaCheck, FaUser, FaCalendarAlt } from 'react-icons/fa';
-import { getUnitVacations, getVacationIntersections } from '../../api/vacations'; // <<< Исправлен импорт
+import { FaExclamationTriangle, FaCheck, FaUser, FaCalendarAlt, FaUsers, FaClock, FaThumbsUp, FaThumbsDown } from 'react-icons/fa'; // Добавлены иконки
+import { getManagerDashboardData } from '../../api/vacations'; // Используем новую функцию
 import 'react-calendar/dist/Calendar.css';
 import './ManagerDashboard.css'; // Предполагается, что CSS файл будет создан
 
+// Вспомогательная функция для форматирования дат
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleDateString('ru-RU');
+};
+
 const ManagerDashboard = () => {
-  const [year, setYear] = useState(new Date().getFullYear() + 1);
-  const [unitId, setUnitId] = useState(1); // <<< Переименована переменная состояния
-  const [vacations, setVacations] = useState([]);
-  const [intersections, setIntersections] = useState([]);
+  const [year, setYear] = useState(new Date().getFullYear()); // По умолчанию текущий год
+  // const [unitId, setUnitId] = useState(1); // Больше не нужно, бэкенд определяет по токену
+  // const [vacations, setVacations] = useState([]); // Заменено на dashboardData
+  // const [intersections, setIntersections] = useState([]); // Заменено на dashboardData.upcomingConflicts
+  const [dashboardData, setDashboardData] = useState(null); // Новое состояние для данных дашборда
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('calendar'); // 'calendar' или 'intersections'
+  const [activeTab, setActiveTab] = useState('stats'); // 'stats', 'calendar' или 'conflicts'
   const [calendarDate, setCalendarDate] = useState(new Date());
 
 
-  // Загрузка данных при изменении года или подразделения
+  // Загрузка данных при изменении года
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Получение отпусков сотрудников подразделения
-        const vacationsData = await getUnitVacations(unitId, year); // <<< Исправлен вызов и параметр
-        setVacations(vacationsData);
-        
-        // Получение пересечений отпусков
-        const intersectionsData = await getVacationIntersections(unitId, year); // <<< Исправлен параметр
-        setIntersections(intersectionsData);
+        // Получение данных дашборда
+        const data = await getManagerDashboardData(); // Год пока не передаем, бэкенд использует текущий
+        setDashboardData(data);
       } catch (error) {
-        toast.error('Ошибка при загрузке данных');
+        toast.error(`Ошибка при загрузке данных дашборда: ${error.message}`);
         console.error(error);
+        setDashboardData(null); // Сбрасываем данные при ошибке
       } finally {
         setLoading(false);
       }
     };
-    
-    // Получение ID подразделения руководителя (в реальном приложении из user context)
-    // const currentUser = JSON.parse(localStorage.getItem('user'));
-    // if (currentUser && currentUser.departmentId) {
-    //   setDepartmentId(currentUser.departmentId);
-    // } else {
-    //   toast.error('Не удалось определить подразделение руководителя');
-    // }
 
     fetchData();
-  }, [year, unitId]); // <<< Исправлена зависимость useEffect
+  }, []); // Загружаем один раз при монтировании (год пока не используется в API)
 
   // Функция для отображения отпусков в календаре
+  // TODO: Для отображения ВСЕХ отпусков (FaUser) нужно будет отдельно загружать
+  //       данные getApprovedVacationsForCalendar или getAllVacations с фильтром.
+  //       Пока оставим только маркеры конфликтов.
   const getTileContent = ({ date, view }) => {
-    if (view !== 'month') return null;
-    
+    if (view !== 'month' || !dashboardData?.upcomingConflicts) return null;
+
     const dateString = date.toISOString().split('T')[0]; // Формат YYYY-MM-DD
 
-    // Находим все отпуска на эту дату
-    const vacationsOnDate = vacations.filter(vacation => {
-      return vacation.periods.some(period => {
-        return dateString >= period.startDate && dateString <= period.endDate;
-      });
+    // Находим конфликты на эту дату
+    const conflictsOnDate = dashboardData.upcomingConflicts.filter(conflict => {
+       // Проверяем пересечение с датой календаря
+       const overlapStart = new Date(conflict.overlapStartDate);
+       const overlapEnd = new Date(conflict.overlapEndDate);
+       const currentDate = new Date(dateString);
+       // Устанавливаем время на 00:00:00 для корректного сравнения дат
+       overlapStart.setHours(0, 0, 0, 0);
+       overlapEnd.setHours(0, 0, 0, 0);
+       currentDate.setHours(0, 0, 0, 0);
+       return currentDate >= overlapStart && currentDate <= overlapEnd;
     });
-    
-    // Находим пересечения на эту дату
-    const intersectionsOnDate = intersections.filter(intersection => {
-       return dateString >= intersection.startDate && dateString <= intersection.endDate;
-    });
-    
-    if (intersectionsOnDate.length > 0) {
+
+    if (conflictsOnDate.length > 0) {
       return (
         <div className="calendar-marker intersection-marker">
           <FaExclamationTriangle />
-          {/* <span>{intersectionsOnDate.length * 2}</span> Можно показывать кол-во сотрудников */}
         </div>
       );
     }
-    
-    if (vacationsOnDate.length > 0) {
-      return (
-        <div className="calendar-marker vacation-marker">
-          <FaUser />
-          {/* <span>{vacationsOnDate.length}</span> */}
-        </div>
-      );
-    }
-    
+
+    // TODO: Добавить логику для маркера обычного отпуска (FaUser),
+    //       когда будут загружаться все утвержденные отпуска.
+
     return null;
   };
 
   // Функция для определения класса даты в календаре
   const getTileClassName = ({ date, view }) => {
-    if (view !== 'month') return '';
-    
+    if (view !== 'month' || !dashboardData?.upcomingConflicts) return '';
+
     const dateString = date.toISOString().split('T')[0]; // Формат YYYY-MM-DD
 
-    // Проверяем, есть ли пересечения на эту дату
-    const hasIntersections = intersections.some(intersection => {
-      return dateString >= intersection.startDate && dateString <= intersection.endDate;
+    // Проверяем, есть ли конфликты на эту дату
+    const hasConflicts = dashboardData.upcomingConflicts.some(conflict => {
+       const overlapStart = new Date(conflict.overlapStartDate);
+       const overlapEnd = new Date(conflict.overlapEndDate);
+       const currentDate = new Date(dateString);
+       overlapStart.setHours(0, 0, 0, 0);
+       overlapEnd.setHours(0, 0, 0, 0);
+       currentDate.setHours(0, 0, 0, 0);
+       return currentDate >= overlapStart && currentDate <= overlapEnd;
     });
-    
-    if (hasIntersections) {
+
+    if (hasConflicts) {
       return 'intersection-date';
     }
-    
-    // Проверяем, есть ли отпуска на эту дату
-    const hasVacations = vacations.some(vacation => {
-      return vacation.periods.some(period => {
-        return dateString >= period.startDate && dateString <= period.endDate;
-      });
-    });
-    
-    if (hasVacations) {
-      return 'vacation-date';
-    }
-    
+
+    // TODO: Добавить класс 'vacation-date' для обычных отпусков,
+    //       когда будут загружаться все утвержденные отпуска.
+
     return '';
+  };
+
+  // Компонент для отображения статистики
+  const StatsDisplay = () => {
+    if (!dashboardData) return <p>Нет данных для отображения.</p>;
+
+    return (
+      <motion.div
+        className="stats-container card"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <h3>Статистика ({year})</h3>
+        <div className="stats-grid">
+          <div className="stat-item">
+            <FaClock className="stat-icon pending" />
+            <span className="stat-value">{dashboardData.pendingRequestsCount ?? 'N/A'}</span>
+            <span className="stat-label">Заявок на рассмотрении</span>
+          </div>
+           <div className="stat-item">
+            <FaUsers className="stat-icon users" />
+            <span className="stat-value">{dashboardData.subordinateUserCount ?? 'N/A'}</span>
+            <span className="stat-label">Подчиненных</span>
+          </div>
+          <div className="stat-item">
+            <FaThumbsUp className="stat-icon approved" />
+            <span className="stat-value">{dashboardData.approvedDaysCountYear ?? 'N/A'}</span>
+            <span className="stat-label">Утверждено дней</span>
+          </div>
+          <div className="stat-item">
+            <FaThumbsDown className="stat-icon rejected" />
+            <span className="stat-value">{dashboardData.rejectedDaysCountYear ?? 'N/A'}</span>
+            <span className="stat-label">Отклонено дней</span>
+          </div>
+          <div className="stat-item">
+            <FaClock className="stat-icon pending-days" />
+            <span className="stat-value">{dashboardData.pendingDaysCountYear ?? 'N/A'}</span>
+            <span className="stat-label">Дней на рассмотрении</span>
+          </div>
+        </div>
+      </motion.div>
+    );
   };
 
   return (
@@ -125,43 +158,52 @@ const ManagerDashboard = () => {
       transition={{ duration: 0.5 }}
     >
       <h2>Дашборд руководителя</h2>
-      
+
       <div className="dashboard-controls card">
-        <div className="year-selector">
+        {/* <div className="year-selector">
           <label htmlFor="manager-year">Год:</label>
-          <select 
-            id="manager-year" 
-            value={year} 
+          <select
+            id="manager-year"
+            value={year}
             onChange={(e) => setYear(parseInt(e.target.value))}
             disabled={loading}
           >
             <option value={new Date().getFullYear()}>Текущий год</option>
             <option value={new Date().getFullYear() + 1}>Следующий год</option>
           </select>
-        </div>
-        
+        </div> */}
+        {/* Селектор года пока убран, т.к. API его не использует */}
+
         <div className="tab-selector">
-          <button 
+           <button
+            className={`tab-button btn ${activeTab === 'stats' ? 'active' : ''}`}
+            onClick={() => setActiveTab('stats')}
+          >
+             Статистика
+          </button>
+          <button
             className={`tab-button btn ${activeTab === 'calendar' ? 'active' : ''}`}
             onClick={() => setActiveTab('calendar')}
           >
             <FaCalendarAlt /> Календарь
           </button>
-          <button 
-            className={`tab-button btn ${activeTab === 'intersections' ? 'active' : ''}`}
-            onClick={() => setActiveTab('intersections')}
+          <button
+            className={`tab-button btn ${activeTab === 'conflicts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('conflicts')}
           >
-            <FaExclamationTriangle /> Пересечения ({intersections.length})
+            <FaExclamationTriangle /> Конфликты ({dashboardData?.upcomingConflicts?.length ?? 0})
           </button>
         </div>
       </div>
-      
+
       {loading ? (
         <div className="loading-spinner">Загрузка данных...</div>
       ) : (
         <>
+          {activeTab === 'stats' && <StatsDisplay />}
+
           {activeTab === 'calendar' && (
-            <motion.div 
+            <motion.div
               className="calendar-container card"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -175,67 +217,72 @@ const ManagerDashboard = () => {
                 locale="ru-RU" // Установка русской локали
                 className="department-calendar"
               />
-              
+
               <div className="calendar-legend">
-                <div className="legend-item">
+                {/* <div className="legend-item">
                   <div className="legend-color vacation"></div>
                   <span>Сотрудники в отпуске</span>
-                </div>
+                </div> */}
                 <div className="legend-item">
                   <div className="legend-color intersection"></div>
-                  <span>Пересечения отпусков</span>
+                  <span>Конфликты отпусков</span>
                 </div>
               </div>
             </motion.div>
           )}
-          
-          {activeTab === 'intersections' && (
-            <motion.div 
-              className="intersections-container card"
+
+          {activeTab === 'conflicts' && (
+            <motion.div
+              className="conflicts-container card" // Переименован класс
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <h3>Пересечения отпусков</h3>
-              
-              {intersections.length === 0 ? (
-                <div className="no-intersections">
+              <h3>Предстоящие конфликты отпусков</h3>
+
+              {!dashboardData || !dashboardData.upcomingConflicts || dashboardData.upcomingConflicts.length === 0 ? (
+                <div className="no-conflicts"> {/* Переименован класс */}
                   <FaCheck />
-                  <p>Пересечений отпусков не найдено</p>
+                  <p>Конфликтов отпусков не найдено</p>
                 </div>
               ) : (
-                <div className="intersections-list">
-                  {intersections.map((intersection, index) => (
-                    <motion.div 
-                      key={index}
-                      className="intersection-item"
+                <div className="conflicts-list"> {/* Переименован класс */}
+                  {dashboardData.upcomingConflicts.map((conflict, index) => (
+                    <motion.div
+                      key={`${conflict.originalPeriodID}-${conflict.conflictingPeriodID}-${index}`} // Более надежный ключ
+                      className="conflict-item" // Переименован класс
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.1 * index }}
                     >
-                      <div className="intersection-header">
-                        <FaExclamationTriangle className="intersection-icon" />
-                        <span>Пересечение #{index + 1}</span>
+                      <div className="conflict-header"> {/* Переименован класс */}
+                        <FaExclamationTriangle className="conflict-icon" /> {/* Переименован класс */}
+                        <span>Конфликт #{index + 1}</span>
                       </div>
-                      <div className="intersection-details">
-                        <div className="intersection-users">
-                          <div className="intersection-user">
+                      <div className="conflict-details"> {/* Переименован класс */}
+                        <div className="conflict-users"> {/* Переименован класс */}
+                          <div className="conflict-user"> {/* Переименован класс */}
                             <FaUser />
-                            <span>{intersection.userName1} (ID: {intersection.userId1})</span>
+                            {/* Используем поля из ConflictingPeriod */}
+                            <span>{conflict.originalUserFullName ?? `User ID: ${conflict.originalUserID}`}</span>
+                            <small> (Заявка #{conflict.originalRequestID})</small>
                           </div>
-                          <div className="intersection-user">
+                          <div className="conflict-user"> {/* Переименован класс */}
                             <FaUser />
-                            <span>{intersection.userName2} (ID: {intersection.userId2})</span>
+                            <span>{conflict.conflictingUserFullName ?? `User ID: ${conflict.conflictingUserID}`}</span>
+                             <small> (Заявка #{conflict.conflictingRequestID})</small>
                           </div>
                         </div>
-                        <div className="intersection-dates">
-                          <div>
-                            <strong>Период пересечения:</strong> 
-                            {new Date(intersection.startDate).toLocaleDateString('ru-RU')} - 
-                            {new Date(intersection.endDate).toLocaleDateString('ru-RU')}
+                        <div className="conflict-dates"> {/* Переименован класс */}
+                           <div>
+                            <strong>Период 1:</strong> {formatDate(conflict.originalStartDate)} - {formatDate(conflict.originalEndDate)}
+                          </div>
+                           <div>
+                            <strong>Период 2:</strong> {formatDate(conflict.conflictingStartDate)} - {formatDate(conflict.conflictingEndDate)}
                           </div>
                           <div>
-                            <strong>Количество дней:</strong> {intersection.daysCount}
+                            <strong>Пересечение:</strong>
+                            {formatDate(conflict.overlapStartDate)} - {formatDate(conflict.overlapEndDate)}
                           </div>
                         </div>
                       </div>

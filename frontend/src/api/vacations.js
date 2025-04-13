@@ -15,8 +15,8 @@ export const getVacationLimit = async (year) => {
     if (error.response && error.response.data && error.response.data.error) {
       throw new Error(error.response.data.error);
     }
-    throw new Error('Не удалось получить лимит отпуска.');
-  }
+    throw new Error('Не удалось получить лимит отпуска.'); // Исправлено сообщение об ошибке
+  } 
 };
 
 /**
@@ -171,16 +171,27 @@ export const getVacationStatuses = async () => {
 /**
  * Утверждение заявки на отпуск (для руководителя)
  * @param {number} id - ID заявки
- * @returns {Promise<Object>} - Результат операции
- * @throws {Error} - В случае ошибки запроса
+ * @param {boolean} [force=false] - Флаг для принудительного утверждения при конфликтах
+ * @returns {Promise<Object>} - Результат операции ({ message: "...", warnings?: [...] })
+ * @throws {Error|ConflictError} - Обычная ошибка или ошибка конфликта с данными { conflicts: [...] }
  */
-export const approveVacationRequest = async (id) => {
+export const approveVacationRequest = async (id, force = false) => {
   try {
-    // Эндпоинт подтвержден в main.go
-    const response = await authApi.post(`/vacations/requests/${id}/approve`);
+    const url = `/vacations/requests/${id}/approve${force ? '?force=true' : ''}`;
+    const response = await authApi.post(url);
+    // Возвращаем весь объект data, так как он может содержать warnings при force=true
     return response.data;
   } catch (error) {
     console.error("API Error in approveVacationRequest:", error);
+    // Специальная обработка для конфликта 409
+    if (error.response && error.response.status === 409 && error.response.data) {
+        // Создаем специфическую ошибку или объект, содержащий конфликты
+        const conflictError = new Error(error.response.data.error || 'Обнаружены конфликты.');
+        conflictError.isConflict = true; // Флаг для идентификации ошибки конфликта
+        conflictError.conflicts = error.response.data.conflicts || []; // Данные о конфликтах
+        throw conflictError;
+    }
+    // Общая обработка ошибок
     if (error.response && error.response.data && error.response.data.error) {
       throw new Error(error.response.data.error);
     }
@@ -206,7 +217,19 @@ export const rejectVacationRequest = async (id, reason = '') => { // Делае�
       throw new Error(error.response.data.error);
     }
     throw new Error('Не удалось отклонить заявку.');
-    }
+  } 
+}; // <-- Эта скобка закрывает функцию rejectVacationRequest
+
+/**
+ * Получение всех УТВЕРЖДЕННЫХ заявок с ФИО (для календаря)
+ * @param {Object} filters - Объект с фильтрами { year?, userId?, unitId? }
+ * @returns {Promise<Array>} - Список утвержденных заявок в формате VacationRequestAdminView
+ * @throws {Error} - В случае ошибки запроса
+ */
+export const getApprovedVacationsForCalendar = async (filters = {}) => {
+  // Устанавливаем фильтр по статусу "Утверждена" (ID 3)
+  const requiredFilters = { ...filters, status: 3 };
+  return getAllVacations(requiredFilters); // Используем существующую функцию getAllVacations
 };
 
 /**
@@ -251,7 +274,7 @@ export const cancelVacationRequest = async (id) => {
             throw new Error(error.response.data.error);
         }
         throw new Error('Не удалось отменить заявку.');
-    }
+    } // <-- Добавлена пропущенная скобка для catch
 };
 
 /**
@@ -277,5 +300,44 @@ export const getAllVacations = async (filters = {}) => {
       throw new Error(error.response.data.error);
     }
     throw new Error('Не удалось получить список всех заявок.');
+  }
+};
+
+/**
+ * Получение утвержденных конфликтов отпусков для видимых юнитов
+ * @param {string} startDate - Начальная дата в формате YYYY-MM-DD
+ * @param {string} endDate - Конечная дата в формате YYYY-MM-DD
+ * @returns {Promise<Array>} - Список конфликтов (ConflictingPeriod)
+ * @throws {Error} - В случае ошибки запроса
+ */
+export const getVacationConflicts = async (startDate, endDate) => {
+  try {
+    const params = { startDate, endDate };
+    const response = await authApi.get('/vacations/conflicts', { params });
+    return response.data;
+  } catch (error) {
+    console.error("API Error in getVacationConflicts:", error);
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw new Error('Не удалось получить конфликты отпусков.');
+  }
+};
+
+/**
+ * Получение данных для дашборда руководителя
+ * @returns {Promise<Object>} - Данные дашборда (ManagerDashboardData)
+ * @throws {Error} - В случае ошибки запроса
+ */
+export const getManagerDashboardData = async () => {
+  try {
+    const response = await authApi.get('/dashboard/manager');
+    return response.data;
+  } catch (error) {
+    console.error("API Error in getManagerDashboardData:", error);
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw new Error('Не удалось получить данные дашборда.');
   }
 };

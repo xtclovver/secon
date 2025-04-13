@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log" // Убедимся, что log импортирован
 	"strings"
+	"time" // Убедимся, что time импортирован
 
 	"vacation-scheduler/internal/models"
 )
@@ -46,6 +47,11 @@ type VacationRepositoryInterface interface {
 	// --- Периоды (при необходимости) ---
 	// GetPeriodsByRequestID(requestID int) ([]models.VacationPeriod, error) // Пример
 	// DeletePeriodsByRequestID(requestID int) error // Пример
+
+	// --- Dashboard Data ---
+	CountPendingRequestsByUnitIDs(unitIDs []int) (int, error)
+	SumRequestedDaysByStatusAndUnitIDs(unitIDs []int, statusIDs []int, year int) (int, error) // Новый метод для суммирования дней
+	GetUpcomingApprovedConflictsByUnitIDs(unitIDs []int, startDate time.Time, endDate time.Time) ([]models.ConflictingPeriod, error)
 }
 
 // VacationRepository предоставляет методы для работы с данными отпусков в БД
@@ -537,11 +543,325 @@ func (r *VacationRepository) CreateNotification(notification *models.Notificatio
 	return nil
 }
 
+// --- Новые методы для проверки конфликтов ---
+
+// GetUserPositionByID получает ID должности пользователя. Возвращает nil, если должность не установлена.
+func (r *VacationRepository) GetUserPositionByID(userID int) (*int, error) {
+	query := `SELECT position_id FROM users WHERE id = ?`
+	var positionID sql.NullInt64 // Используем sql.NullInt64 для обработки NULL
+
+	err := r.db.QueryRow(query, userID).Scan(&positionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("пользователь с ID %d не найден", userID)
+		}
+		return nil, fmt.Errorf("ошибка получения position_id для пользователя %d: %w", userID, err)
+	}
+
+	if !positionID.Valid {
+		return nil, nil // Должность не установлена (NULL)
+	}
+
+	posID := int(positionID.Int64)
+	return &posID, nil
+}
+
+// GetApprovedVacationConflictsByPosition ищет конфликты утвержденных отпусков по должности
+// periodsToCheck: периоды заявки, которую пытаются утвердить
+func (r *VacationRepository) GetApprovedVacationConflictsByPosition(positionID int, excludeUserID int, periodsToCheck []models.VacationPeriod) ([]models.ConflictingPeriod, error) {
+	if len(periodsToCheck) == 0 {
+		return []models.ConflictingPeriod{}, nil // Нет периодов для проверки
+	}
+
+	var conflicts []models.ConflictingPeriod
+
+	// Собираем условия WHERE для дат для всех проверяемых периодов
+	dateConditions := []string{}
+	dateArgs := []interface{}{}
+	for _, p := range periodsToCheck {
+		// Ищем существующие периоды, которые ПЕРЕСЕКАЮТСЯ с проверяемым периодом p
+		// Пересечение: (Existing.Start <= p.End) AND (Existing.End >= p.Start)
+		dateConditions = append(dateConditions, "(vp.start_date <= ? AND vp.end_date >= ?)")
+		dateArgs = append(dateArgs, p.EndDate, p.StartDate)
+	}
+	dateConditionString := strings.Join(dateConditions, " OR ")
+
+	// Основной запрос
+	query := `
+			SELECT
+				u.id as conflicting_user_id,
+				u.full_name as conflicting_user_full_name,
+				vr.id as conflicting_request_id,
+				vp.id as conflicting_period_id,
+				vp.start_date as conflicting_start_date,
+				vp.end_date as conflicting_end_date
+			FROM vacation_periods vp
+			JOIN vacation_requests vr ON vp.request_id = vr.id
+			JOIN users u ON vr.user_id = u.id
+			WHERE vr.status_id = ? -- Только утвержденные
+			  AND u.position_id = ? -- Та же должность
+			  AND vr.user_id != ?   -- Кроме самого пользователя
+			  AND (` + dateConditionString + `) -- Пересечение дат
+		`
+
+	// Собираем аргументы: StatusApproved, positionID, excludeUserID, затем все start/end даты из dateArgs
+	args := []interface{}{models.StatusApproved, positionID, excludeUserID}
+	args = append(args, dateArgs...)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка поиска конфликтующих отпусков: %w", err)
+	}
+	defer rows.Close()
+
+	foundConflicts := make(map[int]models.ConflictingPeriod) // Используем map для временного хранения, ключ - ID конфликтного периода
+
+	for rows.Next() {
+		var conflict models.ConflictingPeriod
+		err := rows.Scan(
+			&conflict.ConflictingUserID,
+			&conflict.ConflictingUserFullName,
+			&conflict.ConflictingRequestID,
+			&conflict.ConflictingPeriodID,
+			&conflict.ConflictingStartDate,
+			&conflict.ConflictingEndDate,
+		)
+		if err != nil {
+			log.Printf("Ошибка сканирования конфликтующего периода: %v", err)
+			continue // Пропускаем эту строку, но продолжаем обработку
+		}
+		foundConflicts[conflict.ConflictingPeriodID] = conflict // Сохраняем найденный конфликтный период
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации по конфликтующим периодам: %w", err)
+	}
+
+	// Теперь для каждого найденного конфликтующего периода нужно определить,
+	// с каким из ИСХОДНЫХ периодов (periodsToCheck) он пересекается и вычислить даты пересечения.
+	for _, conflictingPeriod := range foundConflicts {
+		for _, originalPeriod := range periodsToCheck {
+			// Проверяем пересечение еще раз (хотя запрос уже должен был отфильтровать)
+			// Условие пересечения: StartA <= EndB AND EndA >= StartB
+			if conflictingPeriod.ConflictingStartDate.Time.Unix() <= originalPeriod.EndDate.Time.Unix() &&
+				conflictingPeriod.ConflictingEndDate.Time.Unix() >= originalPeriod.StartDate.Time.Unix() {
+
+				// Находим даты пересечения
+				overlapStart := conflictingPeriod.ConflictingStartDate.Time
+				if originalPeriod.StartDate.Time.After(overlapStart) {
+					overlapStart = originalPeriod.StartDate.Time
+				}
+
+				overlapEnd := conflictingPeriod.ConflictingEndDate.Time
+				if originalPeriod.EndDate.Time.Before(overlapEnd) {
+					overlapEnd = originalPeriod.EndDate.Time
+				}
+
+				// Создаем и добавляем детализированный конфликт
+				detailedConflict := conflictingPeriod                         // Копируем базовую информацию
+				detailedConflict.OriginalRequestID = originalPeriod.RequestID // Заполняем детали исходного периода
+				detailedConflict.OriginalPeriodID = originalPeriod.ID
+				detailedConflict.OriginalStartDate = originalPeriod.StartDate
+				detailedConflict.OriginalEndDate = originalPeriod.EndDate
+				detailedConflict.OverlapStartDate = models.CustomDate{Time: overlapStart} // Заполняем даты пересечения
+				detailedConflict.OverlapEndDate = models.CustomDate{Time: overlapEnd}
+
+				conflicts = append(conflicts, detailedConflict)
+				// Если один конфликтный период пересекается с несколькими исходными,
+				// будет создано несколько записей в `conflicts`. Это нормально.
+			}
+		}
+	}
+
+	return conflicts, nil
+}
+
+// --- Dashboard Data Methods ---
+
+// CountPendingRequestsByUnitIDs подсчитывает заявки в статусе "На рассмотрении" для заданных юнитов
+func (r *VacationRepository) CountPendingRequestsByUnitIDs(unitIDs []int) (int, error) {
+	if len(unitIDs) == 0 {
+		return 0, nil // Нет юнитов для поиска
+	}
+
+	query := `
+		SELECT COUNT(vr.id)
+		FROM vacation_requests vr
+		JOIN users u ON vr.user_id = u.id
+		WHERE vr.status_id = ?
+		  AND u.organizational_unit_id IN (?` + sqlRepeatParams(len(unitIDs)-1) + `)`
+
+	args := []interface{}{models.StatusPending}
+	for _, id := range unitIDs {
+		args = append(args, id)
+	}
+
+	var count int
+	err := r.db.QueryRow(query, args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("ошибка подсчета ожидающих заявок по юнитам %v: %w", unitIDs, err)
+	}
+	return count, nil
+}
+
+// GetUpcomingApprovedConflictsByUnitIDs ищет утвержденные конфликты в заданном диапазоне дат для юнитов
+func (r *VacationRepository) GetUpcomingApprovedConflictsByUnitIDs(unitIDs []int, startDate time.Time, endDate time.Time) ([]models.ConflictingPeriod, error) {
+	if len(unitIDs) == 0 {
+		return []models.ConflictingPeriod{}, nil
+	}
+
+	// 1. Найти все УТВЕРЖДЕННЫЕ периоды отпусков в ЗАДАННОМ ДИАПАЗОНЕ ДАТ для пользователей из ЗАДАННЫХ ЮНИТОВ
+	queryPeriods := `
+		SELECT
+			vp.id as period_id, vp.request_id, vp.start_date, vp.end_date,
+			vr.user_id, u.full_name, u.position_id
+		FROM vacation_periods vp
+		JOIN vacation_requests vr ON vp.request_id = vr.id
+		JOIN users u ON vr.user_id = u.id
+		WHERE vr.status_id = ? -- Только утвержденные
+		  AND u.organizational_unit_id IN (?` + sqlRepeatParams(len(unitIDs)-1) + `)
+		  AND vp.start_date <= ? -- Периоды, которые начинаются до конца диапазона
+		  AND vp.end_date >= ?   -- Периоды, которые заканчиваются после начала диапазона
+		ORDER BY u.position_id, vp.start_date
+	`
+	args := []interface{}{models.StatusApproved}
+	for _, id := range unitIDs {
+		args = append(args, id)
+	}
+	args = append(args, endDate, startDate)
+
+	rows, err := r.db.Query(queryPeriods, args...)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения утвержденных периодов для юнитов %v: %w", unitIDs, err)
+	}
+	defer rows.Close()
+
+	type periodInfo struct {
+		period     models.VacationPeriod
+		userID     int
+		userFName  string
+		positionID *int // Используем указатель, так как должность может быть NULL
+	}
+	var approvedPeriods []periodInfo
+
+	for rows.Next() {
+		var pi periodInfo
+		var posID sql.NullInt64 // Для сканирования position_id
+		err := rows.Scan(
+			&pi.period.ID, &pi.period.RequestID, &pi.period.StartDate, &pi.period.EndDate,
+			&pi.userID, &pi.userFName, &posID,
+		)
+		if err != nil {
+			log.Printf("Ошибка сканирования утвержденного периода при поиске конфликтов для дашборда: %v", err)
+			continue
+		}
+		if posID.Valid {
+			pInt := int(posID.Int64)
+			pi.positionID = &pInt
+		}
+		approvedPeriods = append(approvedPeriods, pi)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации по утвержденным периодам для дашборда: %w", err)
+	}
+
+	// 2. Найти пересечения между полученными периодами С УЧЕТОМ ДОЛЖНОСТИ
+	var conflicts []models.ConflictingPeriod
+	for i := 0; i < len(approvedPeriods); i++ {
+		p1Info := approvedPeriods[i]
+		if p1Info.positionID == nil {
+			continue // Пропускаем, если должность не указана (не с кем сравнивать)
+		}
+		for j := i + 1; j < len(approvedPeriods); j++ {
+			p2Info := approvedPeriods[j]
+
+			// Проверяем, что пользователи разные, на одной должности и их периоды пересекаются
+			if p1Info.userID != p2Info.userID &&
+				p2Info.positionID != nil && // У второго тоже должна быть должность
+				*p1Info.positionID == *p2Info.positionID && // Должности совпадают
+				p1Info.period.StartDate.Time.Unix() <= p2Info.period.EndDate.Time.Unix() && // Периоды пересекаются
+				p1Info.period.EndDate.Time.Unix() >= p2Info.period.StartDate.Time.Unix() {
+
+				// Находим даты пересечения
+				overlapStart := p1Info.period.StartDate.Time
+				if p2Info.period.StartDate.Time.After(overlapStart) {
+					overlapStart = p2Info.period.StartDate.Time
+				}
+
+				overlapEnd := p1Info.period.EndDate.Time
+				if p2Info.period.EndDate.Time.Before(overlapEnd) {
+					overlapEnd = p2Info.period.EndDate.Time
+				}
+
+				// Создаем конфликт (в обе стороны, но потом можно будет уникализировать, если надо)
+				// Важно: Заполняем поля так, чтобы было понятно, кто с кем конфликтует
+				conflict := models.ConflictingPeriod{
+					ConflictingUserID:       p2Info.userID,
+					ConflictingUserFullName: p2Info.userFName,
+					ConflictingRequestID:    p2Info.period.RequestID,
+					ConflictingPeriodID:     p2Info.period.ID,
+					ConflictingStartDate:    p2Info.period.StartDate,
+					ConflictingEndDate:      p2Info.period.EndDate,
+					OriginalUserID:          p1Info.userID,           // <-- Добавлено ID первого пользователя
+					OriginalUserFullName:    p1Info.userFName,        // <-- Добавлено ФИО первого пользователя
+					OriginalRequestID:       p1Info.period.RequestID, // Используем поля p1 как "оригинальные" для этой записи
+					OriginalPeriodID:        p1Info.period.ID,
+					OriginalStartDate:       p1Info.period.StartDate,
+					OriginalEndDate:         p1Info.period.EndDate,
+					OverlapStartDate:        models.CustomDate{Time: overlapStart},
+					OverlapEndDate:          models.CustomDate{Time: overlapEnd},
+				}
+				conflicts = append(conflicts, conflict)
+			}
+		}
+	}
+
+	// TODO: Возможно, стоит добавить логику для удаления дублирующихся конфликтов (если A+B и B+A считаются одним и тем же)
+
+	return conflicts, nil
+}
+
+// SumRequestedDaysByStatusAndUnitIDs суммирует поле days_requested для заявок с заданными статусами и юнитами за год
+func (r *VacationRepository) SumRequestedDaysByStatusAndUnitIDs(unitIDs []int, statusIDs []int, year int) (int, error) {
+	if len(unitIDs) == 0 || len(statusIDs) == 0 {
+		return 0, nil // Нет юнитов или статусов для поиска
+	}
+
+	unitPlaceholders := sqlRepeatParams(len(unitIDs))
+	statusPlaceholders := sqlRepeatParams(len(statusIDs))
+
+	query := fmt.Sprintf(`
+		SELECT COALESCE(SUM(vr.days_requested), 0)
+		FROM vacation_requests vr
+		JOIN users u ON vr.user_id = u.id
+		WHERE vr.year = ?
+		  AND vr.status_id IN (?%s)
+		  AND u.organizational_unit_id IN (?%s)`, statusPlaceholders, unitPlaceholders)
+
+	args := []interface{}{year}
+	for _, sID := range statusIDs {
+		args = append(args, sID)
+	}
+	for _, uID := range unitIDs {
+		args = append(args, uID)
+	}
+
+	var totalDays int
+	err := r.db.QueryRow(query, args...).Scan(&totalDays)
+	if err != nil {
+		// Если ошибок нет, но сумма NULL (нет заявок), COALESCE вернет 0, ошибки Scan не будет
+		// Обрабатываем только реальные ошибки запроса/сканирования
+		return 0, fmt.Errorf("ошибка суммирования запрошенных дней по статусам %v, юнитам %v, году %d: %w", statusIDs, unitIDs, year, err)
+	}
+
+	return totalDays, nil
+}
+
 // --- Вспомогательные функции ---
 
 // sqlRepeatParams генерирует строку плейсхолдеров (?, ?, ...)
+// count - количество плейсхолдеров ПОСЛЕ первого (т.е. для n параметров нужно передать n-1)
 func sqlRepeatParams(count int) string {
-	if count < 1 {
+	if count < 0 { // Исправлено на < 0, так как 0 значит один параметр уже есть
 		return ""
 	}
 	return strings.Repeat(", ?", count)

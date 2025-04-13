@@ -81,6 +81,8 @@ func main() {
 			vacations.POST("/requests/:id/submit", appHandler.SubmitVacationRequest)
 			vacations.POST("/requests/:id/cancel", appHandler.CancelVacationRequest) // Доступен всем аутентифицированным (проверка прав внутри)
 			vacations.GET("/my", appHandler.GetMyVacations)                          // Получение своих заявок
+			// Новый маршрут для получения конфликтов (доступен всем аутентифицированным)
+			vacations.GET("/conflicts", appHandler.GetVacationConflicts)
 
 			// Маршруты для менеджеров и администраторов
 			vacationsMgmt := vacations.Group("")
@@ -92,6 +94,13 @@ func main() {
 				vacationsMgmt.POST("/requests/:id/approve", appHandler.ApproveVacationRequest) // Утверждение заявки
 				vacationsMgmt.POST("/requests/:id/reject", appHandler.RejectVacationRequest)   // Отклонение заявки
 			}
+		}
+
+		// Маршрут для дашборда руководителя
+		dashboard := api.Group("/dashboard")
+		dashboard.Use(middleware.ManagerOrAdminOnly()) // Доступ только для менеджеров или админов
+		{
+			dashboard.GET("/manager", appHandler.GetManagerDashboard) // Новый маршрут для дашборда
 		}
 
 		// Маршруты только для администраторов (используем appHandler)

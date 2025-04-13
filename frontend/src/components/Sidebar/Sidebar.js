@@ -1,66 +1,61 @@
 import React, { useState, useContext } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion'; // Добавлена AnimatePresence
-import { 
-  FaHome, 
-  FaCalendarAlt, 
-  FaList, 
-  FaPlusCircle, 
-  FaUsersCog, // Иконка для руководителя/админа
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  FaHome,
+  FaCalendarAlt,
+  FaList,
+  FaPlusCircle,
+  FaUsersCog,
   FaChevronLeft,
   FaChevronRight,
-  FaUserShield, // Иконка для админа
-  FaUserTie, // Иконка для руководителя
-  FaSitemap // Иконка для структуры - ДОБАВЛЕНО
+  FaUserShield,
+  FaUserTie,
+  FaSitemap
 } from 'react-icons/fa';
 import { ThemeContext } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
-import './Sidebar.css'; // CSS для сайдбара
+import './Sidebar.css';
 
 const Sidebar = () => {
   const { darkMode } = useContext(ThemeContext);
-  const { user } = useUser(); 
-  const [collapsed, setCollapsed] = useState(false); 
+  const { user } = useUser();
+  const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
-  // Логируем пользователя при рендере сайдбара
-  console.log("Sidebar rendering with user:", user); 
+  console.log("Sidebar rendering with user:", user);
 
-  // Переключение состояния сворачивания сайдбара
   const toggleCollapse = () => {
     setCollapsed(!collapsed);
   };
 
-  // Анимация для сайдбара
   const sidebarVariants = {
     open: { width: 'var(--sidebar-width)', transition: { duration: 0.3, ease: 'easeInOut' } },
     closed: { width: 'var(--sidebar-width-collapsed)', transition: { duration: 0.3, ease: 'easeInOut' } }
   };
 
-  // Анимация для текста пунктов меню
   const itemTextVariants = {
     open: { opacity: 1, x: 0, display: 'inline', transition: { duration: 0.2, delay: 0.1 } },
     closed: { opacity: 0, x: -10, transitionEnd: { display: 'none' }, transition: { duration: 0.1 } }
   };
-  
-   // Анимация для заголовка "Меню"
+
   const menuTitleVariants = {
     open: { opacity: 1, transition: { duration: 0.3 } },
     closed: { opacity: 0, transition: { duration: 0.1 } }
   };
 
   return (
-    <motion.aside 
+    <motion.aside
       className={`sidebar ${darkMode ? 'dark' : 'light'} ${collapsed ? 'collapsed' : ''}`}
       variants={sidebarVariants}
-      initial={false} // Не анимируем при первой загрузке
+      initial={false}
       animate={collapsed ? 'closed' : 'open'}
     >
       <div className="sidebar-header">
-         <AnimatePresence>
+        <AnimatePresence>
           {!collapsed && (
             <motion.h3
-              key="menu-title" // Ключ для AnimatePresence
+              key="menu-title"
               variants={menuTitleVariants}
               initial="closed"
               animate="open"
@@ -70,12 +65,10 @@ const Sidebar = () => {
             </motion.h3>
           )}
         </AnimatePresence>
-        
         <button className="collapse-btn" onClick={toggleCollapse} aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"}>
           {collapsed ? <FaChevronRight /> : <FaChevronLeft />}
         </button>
       </div>
-      
       <nav className="sidebar-nav">
         <ul>
           {/* Общие пункты меню */}
@@ -99,24 +92,27 @@ const Sidebar = () => {
             <NavLink to="/vacations/list" className={({isActive}) => isActive ? 'active' : ''}>
               <FaList />
               <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
-                Мои заявки
+                {/* Изменено: Условный текст для "Заявки" */}
+                {user?.isManager || user?.isAdmin ? 'Заявки' : 'Мои заявки'}
               </motion.span>
             </NavLink>
           </li>
-          <li>
-            <NavLink to="/vacations/calendar" className={({isActive}) => isActive ? 'active' : ''}>
-              <FaCalendarAlt />
-              <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
-                Календарь отпусков
-              </motion.span>
-            </NavLink>
-          </li>
-          
+          {/* Изменено: Календарь отпусков виден только руководителям и админам */}
+          {(user?.isManager || user?.isAdmin) && (
+            <li>
+              <NavLink to="/vacations/calendar" className={({isActive}) => isActive ? 'active' : ''}>
+                <FaCalendarAlt />
+                <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
+                  Календарь отпусков
+                </motion.span>
+              </NavLink>
+            </li>
+          )}
           {/* Пункты меню для руководителя */}
           {user?.isManager && (
             <li className="role-section manager-section">
               <NavLink to="/manager/dashboard" className={({isActive}) => isActive ? 'active' : ''}>
-                <FaUserTie /> {/* Иконка руководителя */}
+                <FaUserTie />
                 <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
                   Дашборд руководителя
                 </motion.span>
@@ -124,22 +120,20 @@ const Sidebar = () => {
               {/* Другие пункты для руководителя */}
             </li>
           )}
-          
           {/* Пункты меню для администратора */}
-          {user?.isAdmin && ( // ВОЗВРАЩЕНО: Проверяем user.isAdmin
-            <> {/* Используем фрагмент для группировки */}
+          {user?.isAdmin && (
+            <>
               <li className="role-section admin-section">
                  <NavLink to="/admin/dashboard" className={({isActive}) => isActive ? 'active' : ''}>
-                  <FaUserShield /> {/* Иконка админа */}
+                  <FaUserShield />
                   <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
                     Админ-панель
                   </motion.span>
                 </NavLink>
               </li>
-              {/* Новая ссылка на управление подразделениями */}
               <li>
-                <NavLink to="/admin/units" className={({ isActive }) => isActive ? 'active' : ''}> {/* Убеждаемся в правильном синтаксисе */}
-                  <FaSitemap /> {/* Иконка для структуры */}
+                <NavLink to="/admin/units" className={({ isActive }) => isActive ? 'active' : ''}>
+                  <FaSitemap />
                   <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
                     Упр. подразделениями
                   </motion.span>
