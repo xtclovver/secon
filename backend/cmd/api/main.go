@@ -39,7 +39,7 @@ func main() {
 	// Передаем все три репозитория в NewVacationService
 	vacationService := services.NewVacationService(vacationRepo, userRepo, unitRepo) // Добавлен unitRepo
 	// Создаем UserService
-	userService := services.NewUserService(userRepo)
+	userService := services.NewUserService(userRepo, unitRepo)               // Передаем оба репозитория
 	unitService := services.NewOrganizationalUnitService(unitRepo, userRepo) // Добавлен сервис юнитов
 
 	// Создание обработчиков

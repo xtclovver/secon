@@ -93,10 +93,23 @@ func (h *AppHandler) SetVacationLimit(c *gin.Context) {
 		return
 	}
 
+	// Проверяем, существует ли пользователь, для которого устанавливается лимит
+	targetUser, errUser := h.userService.FindByID(input.UserID)
+	if errUser != nil {
+		// Ошибка при поиске пользователя (например, ошибка БД)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка проверки пользователя: " + errUser.Error()})
+		return
+	}
+	if targetUser == nil {
+		// Пользователь не найден
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь с указанным ID не найден"})
+		return
+	}
+
 	// Вызываем сервис для установки лимита
 	err := h.vacationService.SetVacationLimit(input.UserID, input.Year, input.TotalDays)
 	if err != nil {
-		// Обрабатываем возможные ошибки сервиса (например, отрицательное количество дней)
+		// Обрабатываем возможные ошибки сервиса (например, отрицательное количество дней или ошибка репозитория)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка установки лимита: " + err.Error()})
 		return
 	}
@@ -870,11 +883,11 @@ func (h *AppHandler) UpdateUserVacationLimitHandler(c *gin.Context) {
 		return
 	}
 
-	// Получаем ID пользователя из URL
-	userIDStr := c.Param("userId") // Используем userId из роута
+	// Получаем ID пользователя из URL (исправлено с userId на id)
+	userIDStr := c.Param("id")
 	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID пользователя"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID пользователя в URL"}) // Уточнено сообщение
 		return
 	}
 
@@ -896,11 +909,21 @@ func (h *AppHandler) UpdateUserVacationLimitHandler(c *gin.Context) {
 		return
 	}
 
+	// Проверяем, существует ли пользователь, для которого устанавливается лимит
+	targetUser, errUser := h.userService.FindByID(userID)
+	if errUser != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка проверки пользователя: " + errUser.Error()})
+		return
+	}
+	if targetUser == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь с указанным ID не найден"})
+		return
+	}
+
 	// Вызываем сервис VacationService для установки (создания/обновления) лимита
 	err = h.vacationService.SetVacationLimit(userID, input.Year, input.TotalDays)
 	if err != nil {
-		// Обрабатываем возможные ошибки сервиса
-		// (ошибка БД, но валидация на отрицательные дни уже сделана)
+		// Обрабатываем возможные ошибки сервиса (ошибка БД и т.д.)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка установки лимита отпуска: " + err.Error()})
 		return
 	}

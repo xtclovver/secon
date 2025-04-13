@@ -10,8 +10,9 @@ import (
 )
 
 // --- Vacation Status Constants ---
+// StatusDraft (ID=1) был удален. Остальные статусы НЕ сдвигаются.
 const (
-	StatusDraft     = 1 // Черновик
+	// StatusDraft     = 1 // Черновик - УДАЛЕНО
 	StatusPending   = 2 // На рассмотрении
 	StatusApproved  = 3 // Утверждена
 	StatusRejected  = 4 // Отклонена

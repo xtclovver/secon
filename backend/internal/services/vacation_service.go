@@ -199,8 +199,9 @@ func (s *VacationService) checkUserUnitAccess(accessor *models.User, targetUser 
 
 // SaveVacationRequest сохраняет заявку на отпуск
 func (s *VacationService) SaveVacationRequest(request *models.VacationRequest) error {
+	// Устанавливаем статус "На рассмотрении" по умолчанию, если он не указан
 	if request.StatusID == 0 {
-		request.StatusID = models.StatusDraft
+		request.StatusID = models.StatusPending // Изменено с StatusDraft на StatusPending
 	}
 	request.DaysRequested = 0
 	for _, p := range request.Periods {
@@ -222,9 +223,10 @@ func (s *VacationService) SubmitVacationRequest(requestID int, userID int) error
 	if req.UserID != userID {
 		return errors.New("нет прав на отправку этой заявки")
 	}
-	if req.StatusID != models.StatusDraft {
-		return errors.New("можно отправить только заявку в статусе 'Черновик'")
-	}
+	// Удалена проверка на StatusDraft, так как заявки теперь сразу Pending или другой статус
+	// if req.StatusID != models.StatusDraft {
+	// 	return errors.New("можно отправить только заявку в статусе 'Черновик'")
+	// }
 	if err = s.ValidateVacationRequest(req); err != nil {
 		return fmt.Errorf("ошибка валидации заявки перед отправкой: %w", err)
 	}
@@ -469,7 +471,8 @@ func (s *VacationService) CancelVacationRequest(requestID int, cancellingUserID 
 	}
 
 	canCancel := false
-	if req.UserID == cancellingUserID && (req.StatusID == models.StatusDraft || req.StatusID == models.StatusPending) {
+	// Пользователь может отменить свою заявку только в статусе "На рассмотрении"
+	if req.UserID == cancellingUserID && req.StatusID == models.StatusPending {
 		canCancel = true
 	} else {
 		cancellingUser, err := s.userRepo.FindByID(cancellingUserID)
