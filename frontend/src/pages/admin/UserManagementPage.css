@@ -3,7 +3,6 @@
   padding: 25px;
   background-color: var(--bg-secondary); /* Фон как в меню */
   color: var(--text-color);
-  max-width: 1200px; /* Увеличим ширину для таблицы */
   margin: 30px auto;
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-lg);
