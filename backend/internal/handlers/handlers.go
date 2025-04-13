@@ -1115,3 +1115,55 @@ func (h *AppHandler) UpdateUserAdminHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Данные пользователя успешно обновлены администратором"})
 }
+
+// ExportVacationsByUnits обработчик для экспорта данных отпусков по юнитам (Admin only)
+func (h *AppHandler) ExportVacationsByUnits(c *gin.Context) {
+	// Проверяем права администратора
+	isAdminVal, exists := c.Get("isAdmin")
+	if !exists || !isAdminVal.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ запрещен. Требуются права администратора"})
+		return
+	}
+
+	// Структура для данных из тела запроса
+	var input struct {
+		UnitIDs []int `json:"unit_ids" binding:"required"`
+		Year    *int  `json:"year"` // Год опционален, можно использовать текущий по умолчанию
+	}
+
+	// Привязываем JSON из тела запроса
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные: " + err.Error()})
+		return
+	}
+
+	// Проверяем, что список ID не пустой
+	if len(input.UnitIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Необходимо указать хотя бы один ID организационного юнита"})
+		return
+	}
+
+	// Определяем год для экспорта
+	yearToExport := time.Now().Year() // По умолчанию текущий год
+	if input.Year != nil {
+		yearToExport = *input.Year
+		// Можно добавить валидацию года, если нужно (например, не слишком старый/будущий)
+	}
+
+	// Вызываем сервис для получения данных для экспорта
+	// TODO: Создать метод GetVacationDataForExport в vacationService
+	exportData, err := h.vacationService.GetVacationDataForExport(input.UnitIDs, yearToExport)
+	if err != nil {
+		// Обрабатываем возможные ошибки сервиса (например, юнит не найден, ошибка БД)
+		statusCode := http.StatusInternalServerError
+		errMsg := "Ошибка получения данных для экспорта: " + err.Error()
+		// TODO: Добавить обработку специфичных ошибок, если сервис их возвращает (e.g., StatusNotFound)
+		c.JSON(statusCode, gin.H{"error": errMsg})
+		return
+	}
+
+	// Возвращаем данные для экспорта
+	// Формат данных должен быть удобен для генерации XLSX на фронтенде
+	// Например, массив объектов, где каждый объект - строка в таблице Т-7
+	c.JSON(http.StatusOK, exportData)
+}

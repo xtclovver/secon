@@ -30,6 +30,8 @@ type VacationServiceInterface interface {
 	GetManagerDashboardData(managerID int) (*models.ManagerDashboardData, error)
 	// Добавлен метод для получения конфликтов для календаря/списка
 	GetVacationConflicts(requestingUserID int, startDate time.Time, endDate time.Time) ([]models.ConflictingPeriod, error)
+	// Добавлен метод для получения данных для экспорта
+	GetVacationDataForExport(unitIDs []int, year int) ([]models.VacationExportRow, error)
 }
 
 // VacationRepositoryInterface определяет методы для работы с данными отпусков.
@@ -858,6 +860,153 @@ func max(t1, t2 time.Time) time.Time {
 		return t1
 	}
 	return t2
+}
+
+// GetVacationDataForExport собирает данные для экспорта графика отпусков (Форма Т-7)
+func (s *VacationService) GetVacationDataForExport(unitIDs []int, year int) ([]models.VacationExportRow, error) {
+	log.Printf("[Service GetVacationDataForExport] Starting export data retrieval for units %v, year %d", unitIDs, year)
+
+	// 1. Получить утвержденные заявки для указанных юнитов и года.
+	//    Для формы Т-7 обычно нужны утвержденные отпуска.
+	approvedStatus := models.StatusApproved
+	statusFilter := &approvedStatus // Фильтруем только по утвержденным
+	// Используем GetAllVacationRequests, так как он возвращает больше данных (имена, статусы)
+	// Передаем nil для userIDFilter, так как нам нужны все пользователи в этих юнитах
+	// Передаем yearFilter
+	yearFilter := &year
+	// Исправлено: передаем statusFilter (*int)
+	requests, err := s.vacationRepo.GetAllVacationRequests(yearFilter, statusFilter, nil, unitIDs) // Передаем unitIDs как фильтр
+	if err != nil {
+		log.Printf("[Service GetVacationDataForExport] Error fetching vacation requests for units %v, year %d: %v", unitIDs, year, err)
+		return nil, fmt.Errorf("ошибка получения заявок для экспорта: %w", err)
+	}
+
+	log.Printf("[Service GetVacationDataForExport] Fetched %d requests for units %v, year %d", len(requests), unitIDs, year)
+
+	// 2. Собрать ID всех пользователей из полученных заявок
+	userIDs := make(map[int]struct{})
+	for _, req := range requests {
+		userIDs[req.UserID] = struct{}{}
+	}
+	if len(userIDs) == 0 {
+		log.Printf("[Service GetVacationDataForExport] No users found in requests for units %v, year %d. Returning empty export.", unitIDs, year)
+		return []models.VacationExportRow{}, nil // Нет данных для экспорта
+	}
+
+	// 3. Получить информацию о пользователях (ФИО, должность, юнит)
+	// TODO: Нужен метод в userRepo для получения пользователей по списку ID с их должностями и юнитами
+	// Пока используем существующий GetUsersByUnitIDs и дополняем информацией
+	usersMap := make(map[int]models.User) // Карта для быстрого доступа к данным пользователя
+	allUsersInUnits, err := s.userRepo.GetUsersByUnitIDs(unitIDs)
+	if err != nil {
+		log.Printf("[Service GetVacationDataForExport] Error fetching user details for units %v: %v", unitIDs, err)
+		// Не прерываем, попробуем собрать что есть
+	} else {
+		for _, u := range allUsersInUnits {
+			// Добавляем только тех пользователей, чьи заявки мы получили
+			if _, ok := userIDs[u.ID]; ok {
+				usersMap[u.ID] = u
+			}
+		}
+	}
+	log.Printf("[Service GetVacationDataForExport] Fetched details for %d users.", len(usersMap))
+
+	// 4. Получить информацию о юнитах (названия)
+	// TODO: Нужен метод в unitRepo для получения юнитов по списку ID
+	// Пока используем GetAll и фильтруем
+	unitsMap := make(map[int]models.OrganizationalUnit)
+	allUnits, err := s.unitRepo.GetAll() // Получаем все юниты
+	if err != nil {
+		log.Printf("[Service GetVacationDataForExport] Error fetching unit details: %v", err)
+		// Не прерываем, названия юнитов будут пустыми
+	} else {
+		tempMap := make(map[int]models.OrganizationalUnit)
+		for _, u := range allUnits {
+			tempMap[u.ID] = *u // Копируем значение
+		}
+		// Заполняем карту только для нужных юнитов
+		for _, unitID := range unitIDs {
+			if unit, ok := tempMap[unitID]; ok {
+				unitsMap[unitID] = unit
+			}
+		}
+		// Дополнительно получаем юниты пользователей, если они не попали в исходный список unitIDs
+		for _, user := range usersMap {
+			if user.OrganizationalUnitID != nil {
+				unitID := *user.OrganizationalUnitID
+				if _, exists := unitsMap[unitID]; !exists {
+					if unit, ok := tempMap[unitID]; ok {
+						unitsMap[unitID] = unit
+					}
+				}
+			}
+		}
+	}
+	log.Printf("[Service GetVacationDataForExport] Fetched details for %d units.", len(unitsMap))
+
+	// 5. Сформировать строки для экспорта (VacationExportRow)
+	exportRows := []models.VacationExportRow{}
+	sequence := 1
+	for _, req := range requests {
+		user, userOk := usersMap[req.UserID]
+		if !userOk {
+			log.Printf("[Service GetVacationDataForExport] Warning: User details not found for UserID %d in request %d. Skipping periods for this user.", req.UserID, req.ID)
+			continue // Пропускаем периоды, если нет данных пользователя
+		}
+
+		unitName := "N/A"
+		if user.OrganizationalUnitID != nil {
+			unit, unitOk := unitsMap[*user.OrganizationalUnitID]
+			if unitOk {
+				unitName = unit.Name
+			} else {
+				log.Printf("[Service GetVacationDataForExport] Warning: Unit details not found for UnitID %d (User %d).", *user.OrganizationalUnitID, user.ID)
+			}
+		} else {
+			log.Printf("[Service GetVacationDataForExport] Warning: User %d has no assigned unit.", user.ID)
+		}
+
+		positionName := "N/A"
+		if user.PositionName != nil {
+			positionName = *user.PositionName
+		} else {
+			log.Printf("[Service GetVacationDataForExport] Warning: User %d has no assigned position name.", user.ID)
+		}
+
+		// Для каждого периода отпуска создаем отдельную строку в экспорте
+		for _, period := range req.Periods {
+			row := models.VacationExportRow{
+				SequenceNumber:        sequence,
+				UnitName:              unitName,
+				PositionName:          positionName,
+				FullName:              user.FullName,
+				EmployeeNumber:        fmt.Sprintf("%d", user.ID), // Используем ID как табельный номер
+				PlannedDaysMain:       period.DaysCount,           // Пока все дни считаем основными
+				PlannedDaysAdditional: 0,                          // Дополнительные пока не учитываем
+				PlannedDaysTotal:      period.DaysCount,
+				PlannedDate:           period.StartDate,
+				ActualDate:            nil, // Заполняется, если статус Approved?
+				TransferReason:        "",  // Пока пусто
+				TransferDate:          nil, // Пока пусто
+				Note:                  "",  // Пока пусто
+			}
+
+			// Заполняем фактическую дату, если заявка утверждена
+			if req.StatusID == models.StatusApproved {
+				// Копируем PlannedDate в ActualDate
+				actualDateCopy := period.StartDate
+				row.ActualDate = &actualDateCopy
+			}
+
+			// TODO: Добавить логику для переносов (TransferReason, TransferDate) и примечаний (Note), если она есть
+
+			exportRows = append(exportRows, row)
+			sequence++
+		}
+	}
+
+	log.Printf("[Service GetVacationDataForExport] Generated %d rows for export.", len(exportRows))
+	return exportRows, nil
 }
 func min(t1, t2 time.Time) time.Time {
 	if t1.Before(t2) {

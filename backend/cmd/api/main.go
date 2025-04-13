@@ -133,6 +133,12 @@ func main() {
 				adminUsers.PUT("/:id/vacation-limit", appHandler.UpdateUserVacationLimitHandler) // PUT /api/admin/users/{id}/vacation-limit
 				// TODO: Добавить маршруты для создания/удаления пользователей админом, если нужно
 			}
+
+			// Маршрут для экспорта отпусков (Admin only)
+			adminVacations := admin.Group("/vacations")
+			{
+				adminVacations.POST("/export", appHandler.ExportVacationsByUnits) // POST /api/admin/vacations/export
+			}
 		}
 
 		// Маршрут для обновления профиля пользователя (доступен всем аутентифицированным, права проверяются в обработчике)

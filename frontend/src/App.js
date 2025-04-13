@@ -38,7 +38,8 @@ const VacationsList = lazy(() => import('./pages/vacations/VacationsList')); // 
 const VacationCalendar = lazy(() => import('./pages/vacations/VacationCalendar')); // Будет создан позже
 const UserProfilePage = lazy(() => import('./pages/profile/UserProfilePage'));
 const DepartmentManagementPage = lazy(() => import('./pages/admin/DepartmentManagementPage'));
-const UserManagementPage = lazy(() => import('./pages/admin/UserManagementPage')); // <-- Добавляем импорт новой страницы
+const UserManagementPage = lazy(() => import('./pages/admin/UserManagementPage'));
+const ExportVacationsPage = lazy(() => import('./pages/admin/ExportVacationsPage')); // <-- Добавляем импорт страницы экспорта
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 // Компонент-обертка для основного макета приложения
@@ -300,9 +301,16 @@ const App = () => {
                               user?.isAdmin ? <UserManagementPage /> : <Navigate to="/dashboard" replace />
                             }
                           />
+                          {/* Новый маршрут для экспорта отпусков (только админ) */}
+                          <Route
+                            path="/admin/export-vacations"
+                            element={
+                              user?.isAdmin ? <ExportVacationsPage /> : <Navigate to="/dashboard" replace />
+                            }
+                          />
                        </Route> {/* Конец MainLayout */}
                      </Route> {/* Конец ProtectedRoute */}
-                      
+
                     {/* Маршрут 404 (вне MainLayout, но можно и внутри, если нужен хедер/футер) */}
                     <Route path="*" element={<NotFoundPage />} />
                   </Routes>

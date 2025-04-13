@@ -341,3 +341,28 @@ export const getManagerDashboardData = async () => {
     throw new Error('Не удалось получить данные дашборда.');
   }
 };
+
+/**
+ * Получение данных отпусков для экспорта по выбранным юнитам (для админа)
+ * @param {number[]} unitIds - Массив ID организационных юнитов
+ * @param {number} [year] - Опциональный год (по умолчанию текущий на бэкенде)
+ * @returns {Promise<Array>} - Массив объектов VacationExportRow
+ * @throws {Error} - В случае ошибки запроса
+ */
+export const exportVacationsByUnits = async (unitIds, year = null) => {
+  try {
+    const payload = { unit_ids: unitIds };
+    if (year !== null) {
+      payload.year = year;
+    }
+    // Используем POST-запрос, как определено в main.go
+    const response = await authApi.post('/admin/vacations/export', payload);
+    return response.data; // Ожидаем массив VacationExportRow
+  } catch (error) {
+    console.error("API Error in exportVacationsByUnits:", error);
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw new Error('Не удалось получить данные для экспорта отпусков.');
+  }
+};

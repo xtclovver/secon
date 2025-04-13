@@ -11,7 +11,8 @@ import {
   FaChevronRight,
   FaUserShield,
   FaUserTie,
-  FaSitemap
+  FaSitemap,
+  FaFileExport // Добавлено для иконки экспорта
 } from 'react-icons/fa';
 import { ThemeContext } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
@@ -131,13 +132,30 @@ const Sidebar = () => {
                   </motion.span>
                 </NavLink>
               </li>
-              {/* Ссылка на управление подразделениями удалена по запросу */}
+              {/* Восстановлена ссылка на управление подразделениями (путь исправлен на /admin/units) */}
               <li>
-                {/* Добавлена ссылка на управление пользователями */}
+                <NavLink to="/admin/units" className={({ isActive }) => isActive ? 'active' : ''}>
+                  <FaSitemap /> {/* Иконка для подразделений */}
+                  <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
+                    Управление подразделениями
+                  </motion.span>
+                </NavLink>
+              </li>
+              <li>
+                {/* Ссылка на управление пользователями */}
                 <NavLink to="/admin/users" className={({ isActive }) => isActive ? 'active' : ''}>
                   <FaUsersCog /> {/* Используем иконку управления пользователями */}
                   <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
                     Управление пользователями
+                  </motion.span>
+                </NavLink>
+              </li>
+              {/* Добавлена ссылка на экспорт отпусков */}
+              <li>
+                <NavLink to="/admin/export-vacations" className={({ isActive }) => isActive ? 'active' : ''}>
+                  <FaFileExport />
+                  <motion.span variants={itemTextVariants} animate={collapsed ? 'closed' : 'open'}>
+                    Экспорт отпусков
                   </motion.span>
                 </NavLink>
               </li>

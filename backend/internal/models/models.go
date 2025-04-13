@@ -291,3 +291,21 @@ type ManagerDashboardData struct {
 	SubordinateUserCount  int                 `json:"subordinate_user_count"`   // Общее количество подчиненных пользователей
 	// Можно добавить другие счетчики при необходимости
 }
+
+// VacationExportRow структура для строки данных в экспорте Т-7
+// Поля соответствуют столбцам формы Т-7 из примера
+type VacationExportRow struct {
+	SequenceNumber        int         `json:"sequence_number"`         // 1. № п/п (будет присвоен при генерации)
+	UnitName              string      `json:"unit_name"`               // 2. Структурное подразделение
+	PositionName          string      `json:"position_name"`           // 3. Должность
+	FullName              string      `json:"full_name"`               // 4. Фамилия, имя, отчество
+	EmployeeNumber        string      `json:"employee_number"`         // 5. Табельный номер (используем UserID или Login)
+	PlannedDaysMain       int         `json:"planned_days_main"`       // 6. Дни основного отпуска (из периода)
+	PlannedDaysAdditional int         `json:"planned_days_additional"` // 7. Дни дополнительного отпуска (пока 0)
+	PlannedDaysTotal      int         `json:"planned_days_total"`      // 8. Итого дней (сумма)
+	PlannedDate           CustomDate  `json:"planned_date"`            // 9. Дата запланированная (StartDate периода)
+	ActualDate            *CustomDate `json:"actual_date,omitempty"`   // 10. Дата фактическая (StartDate, если утвержден?) - Используем указатель
+	TransferReason        string      `json:"transfer_reason"`         // 11. Основание переноса (пока пусто)
+	TransferDate          *CustomDate `json:"transfer_date,omitempty"` // 12. Дата предполагаемого отпуска (пока пусто) - Используем указатель
+	Note                  string      `json:"note"`                    // 13. Примечание (пока пусто)
+}
